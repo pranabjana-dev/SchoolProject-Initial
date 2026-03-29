@@ -1,0 +1,26 @@
+# render.yaml — Render.com deployment configuration
+# Docs: https://render.com/docs/render-yaml-spec
+
+services:
+  - type: web
+    name: school-management
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+
+    # Render injects PORT automatically; Spring Boot reads it via ${PORT:8080}
+    envVars:
+      - key: DATA_DIR
+        value: /app/school-data/
+
+    # Persistent disk — keeps JSON data between deploys
+    # NOTE: Disk is available on paid plans ($7/mo).
+    # On free plan, data resets on each deploy (fine for demo/testing).
+    # Uncomment below to enable persistent storage on a paid plan:
+    # disk:
+    #   name: school-data-disk
+    #   mountPath: /app/school-data
+    #   sizeGB: 1
+
+    healthCheckPath: /actuator/health
+    autoDeploy: true
