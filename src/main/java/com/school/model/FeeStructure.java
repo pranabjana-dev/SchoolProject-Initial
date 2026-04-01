@@ -6,6 +6,8 @@ public class FeeStructure {
     private String programName;
     private double fixedComponent;      // One-time or annual fixed fee (registration, etc.)
     private double sessionFees;         // Monthly recurring session fee
+    private double sportsFees;          // Flat annual sports fee (added to Installment 2)
+    private double celebrationFees;     // Flat annual celebration fee (added to Installment 3)
     private String academicYear;        // e.g., "2024-25"
     private String notes;               // Any additional notes
     private long updatedAt;
@@ -27,6 +29,12 @@ public class FeeStructure {
 
     public double getSessionFees() { return sessionFees; }
     public void setSessionFees(double sessionFees) { this.sessionFees = sessionFees; }
+
+    public double getSportsFees() { return sportsFees; }
+    public void setSportsFees(double sportsFees) { this.sportsFees = sportsFees; }
+
+    public double getCelebrationFees() { return celebrationFees; }
+    public void setCelebrationFees(double celebrationFees) { this.celebrationFees = celebrationFees; }
 
     public String getAcademicYear() { return academicYear; }
     public void setAcademicYear(String academicYear) { this.academicYear = academicYear; }

@@ -49,10 +49,6 @@ public class CalculatorService {
         result.setJoiningDate(request.getJoiningDate());
 
         // ── Academic year determination ────────────────────────────────────────
-        // Academic year starts in June. E.g.:
-        //   Joining Oct 2024 → AY = 2024-25, ends March 31, 2025
-        //   Joining Feb 2025 → AY = 2024-25, ends March 31, 2025
-        //   Joining June 2025 → AY = 2025-26, ends March 31, 2026
         int ayStart = (joiningDate.getMonthValue() >= 6)
                 ? joiningDate.getYear()
                 : joiningDate.getYear() - 1;
@@ -68,11 +64,11 @@ public class CalculatorService {
         // Govt age: DOB → June 1 of the academic year start
         int govtAgeMonths = (int) Math.max(0, ChronoUnit.MONTHS.between(dob, june1));
 
-        // Actual age: DOB → today
-        int actualAgeMonths = (int) Math.max(0, ChronoUnit.MONTHS.between(dob, today));
+        // Actual age: DOB → Joining Date (as requested)
+        int actualAgeMonths = (int) Math.max(0, ChronoUnit.MONTHS.between(dob, joiningDate));
 
-        // Display age components (always from DOB → today)
-        Period agePeriod = Period.between(dob, today);
+        // Display age components: DOB → Joining Date
+        Period agePeriod = Period.between(dob, joiningDate);
         result.setAgeYears(agePeriod.getYears());
         result.setAgeMonths(agePeriod.getMonths());
         result.setAgeDays(agePeriod.getDays());
@@ -87,8 +83,8 @@ public class CalculatorService {
         result.setGovtJune1Date(june1.format(DISPLAY_FMT));
         result.setActualAgeMonths(actualAgeMonths);
 
-        // ── Program determination ──────────────────────────────────────────────
-        String govtProgram = programService.determineProgramByAge(govtAgeMonths);
+        // ── Programme determination ────────────────────────────────────────────
+        String govtProgram   = programService.determineProgramByAge(govtAgeMonths);
         String actualProgram = programService.determineProgramByAge(actualAgeMonths);
 
         result.setGovtRecommendedProgram(govtProgram);
@@ -98,10 +94,9 @@ public class CalculatorService {
         result.setSelectedProgram(selectedProgram);
 
         // ── Duration calculation ───────────────────────────────────────────────
-        // Count whole months from joining month → March (inclusive both ends)
-        // Mid-month joining: the whole joining month counts
+        // Whole months from joining month → March (mid-month joining = full month)
         LocalDate joiningMonthStart = joiningDate.withDayOfMonth(1);
-        LocalDate endMonthStart = endDate.withDayOfMonth(1);
+        LocalDate endMonthStart     = endDate.withDayOfMonth(1);
         int durationMonths = (int) ChronoUnit.MONTHS.between(joiningMonthStart, endMonthStart) + 1;
 
         result.setDurationMonths(durationMonths);
@@ -115,15 +110,43 @@ public class CalculatorService {
         // ── Fee structure lookup ───────────────────────────────────────────────
         Optional<FeeStructure> feeOpt = feeService.getForProgram(selectedProgram, academicYear);
 
-        double fixedComponent = 0.0;
-        double sessionFees = 0.0;
-        double totalBaseFees = 0.0;
+        double fixedComponent   = 0.0;
+        double sessionFees      = 0.0;
+        double sportsFees       = 0.0;
+        double celebrationFees  = 0.0;
+        double totalBaseFees    = 0.0;
 
         if (feeOpt.isPresent()) {
             FeeStructure fee = feeOpt.get();
-            fixedComponent = fee.getFixedComponent();
-            sessionFees = fee.getSessionFees();
+            fixedComponent  = fee.getFixedComponent();
+            sessionFees     = fee.getSessionFees();
+            sportsFees      = fee.getSportsFees();
+            celebrationFees = fee.getCelebrationFees();
+            // Base fees = fixed + prorated sessions (sports/celebration NOT included here)
             totalBaseFees = fixedComponent + (sessionFees * durationMonths);
+
+            //----
+            List<Discount> appliedDiscountsTemp = new ArrayList<>();
+            double totalDiscountAmountTemp = 0.0;
+
+            if (request.getDiscountIds() != null) {
+                for (String discountId : request.getDiscountIds()) {
+                    discountService.findById(discountId).ifPresent(appliedDiscountsTemp::add);
+                }
+                for (Discount d : appliedDiscountsTemp) {
+                    if ("FIXED".equalsIgnoreCase(d.getDiscountType())) {
+                        totalDiscountAmountTemp += d.getValue();
+                    } else if ("PERCENTAGE".equalsIgnoreCase(d.getDiscountType())) {
+                        totalDiscountAmountTemp += totalBaseFees * d.getValue() / 100.0;
+                    }
+                }
+            }
+            //totalBaseFees = (fixedComponent+sessionFees*10) - totalDiscountAmountTemp;
+            //totalBaseFees=fixedComponent + (((totalBaseFees-fixedComponent)/10) * durationMonths);
+            //totalBaseFees = fixedComponent + (sessionFees * durationMonths);
+
+
+            //==
             result.setFeeConfigured(true);
         } else {
             result.setFeeConfigured(false);
@@ -131,45 +154,58 @@ public class CalculatorService {
 
         result.setFixedComponent(round2(fixedComponent));
         result.setSessionFees(round2(sessionFees));
+        result.setSportsFees(round2(sportsFees));
+        result.setCelebrationFees(round2(celebrationFees));
         result.setTotalBaseFees(round2(totalBaseFees));
 
-        // ── Discount application ───────────────────────────────────────────────
+        // ── Discount application (applied only on base fees, not sports/celebration) ──
         List<Discount> appliedDiscounts = new ArrayList<>();
         double totalDiscountAmount = 0.0;
 
         if (request.getDiscountIds() != null) {
             for (String discountId : request.getDiscountIds()) {
-                discountService.findById(discountId).ifPresent(d -> {
-                    appliedDiscounts.add(d);
-                });
+                discountService.findById(discountId).ifPresent(appliedDiscounts::add);
             }
-            final double baseFees = totalBaseFees;
             for (Discount d : appliedDiscounts) {
                 if ("FIXED".equalsIgnoreCase(d.getDiscountType())) {
                     totalDiscountAmount += d.getValue();
                 } else if ("PERCENTAGE".equalsIgnoreCase(d.getDiscountType())) {
-                    totalDiscountAmount += baseFees * d.getValue() / 100.0;
+                    totalDiscountAmount += totalBaseFees * d.getValue() / 100.0;
                 }
             }
         }
 
         double discountedFees = Math.max(0, totalBaseFees - totalDiscountAmount);
+       // double discountedFees = Math.max(0, totalBaseFees);
 
         result.setAppliedDiscounts(appliedDiscounts);
         result.setTotalDiscountAmount(round2(totalDiscountAmount));
         result.setDiscountedFees(round2(discountedFees));
 
         // ── Payment schedule ───────────────────────────────────────────────────
-        // Booking = fixed component (from discounted total, fixed stays fixed)
-        // Remaining = discountedFees - fixedComponent (the variable part after discount)
-        // Inst1 = 40%, Inst2 = 30%, Inst3 = 30% of remaining
-        double remaining = Math.max(0, discountedFees - fixedComponent);
+        // variable = discounted fees minus the fixed component
+        double variable = Math.max(0, discountedFees - fixedComponent);
 
+        double inst1Var = round2(variable * 0.40);
+        double inst2Var = round2(variable * 0.30);
+        double inst3Var = round2(variable * 0.30);
+
+        // Booking = fixed component (user can edit this down in the UI)
+        // If user pays less than fixed, the shortfall is added to installment 1
+        // Backend returns full fixed as default; UI handles partial payment logic
         result.setBookingAmount(round2(fixedComponent));
-        result.setInstallment1(round2(remaining * 0.40));
-        result.setInstallment2(round2(remaining * 0.30));
-        result.setInstallment3(round2(remaining * 0.30));
-        result.setTotalPayable(round2(discountedFees));
+
+        result.setInstallment1Variable(inst1Var);
+        result.setInstallment1(inst1Var);           // UI adds any booking shortfall on top
+
+        result.setInstallment2Variable(inst2Var);
+        result.setInstallment2(round2(inst2Var + sportsFees));     // + sports fees
+
+        result.setInstallment3Variable(inst3Var);
+        result.setInstallment3(round2(inst3Var + celebrationFees)); // + celebration fees
+
+        // Total payable = discounted base fees + sports + celebration
+        result.setTotalPayable(round2(discountedFees + sportsFees + celebrationFees));
 
         return result;
     }

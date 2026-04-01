@@ -469,7 +469,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
   <div class="header-brand">
     <div class="header-icon">🏫</div>
     <div>
-      <div class="header-title">School Management System</div>
+      <div class="header-title">TinyTroves Management System</div>
       <div class="header-sub">Admissions &amp; Fee Management</div>
     </div>
   </div>
@@ -627,13 +627,15 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
             <th>Academic Year</th>
             <th>Fixed Component (₹)</th>
             <th>Session Fees/Month (₹)</th>
+            <th>Sports Fees (₹)</th>
+            <th>Celebration Fees (₹)</th>
             <th>Est. Annual Total (₹)</th>
             <th>Notes</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="fees-tbody">
-          <tr><td colspan="7" class="loading-row"><span class="spinner"></span></td></tr>
+          <tr><td colspan="9" class="loading-row"><span class="spinner"></span></td></tr>
         </tbody>
       </table>
     </div>
@@ -823,6 +825,18 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
         </div>
       </div>
       <div id="fee-preview" style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;font-size:0.82rem;color:var(--text-muted);"></div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Sports Fees (₹)</label>
+          <input type="number" id="fee-sports" placeholder="e.g. 600" min="0" step="0.01" oninput="updateFeePreview()">
+          <div class="hint">Flat annual charge — added to Installment 2</div>
+        </div>
+        <div class="form-group">
+          <label>Celebration Fees (₹)</label>
+          <input type="number" id="fee-celebration" placeholder="e.g. 2400" min="0" step="0.01" oninput="updateFeePreview()">
+          <div class="hint">Flat annual charge — added to Installment 3</div>
+        </div>
+      </div>
       <div class="form-group">
         <label>Notes</label>
         <input type="text" id="fee-notes" placeholder="Any additional notes (optional)">
@@ -1039,21 +1053,23 @@ async function deleteProgram(id, name) {
 // ── Fees ─────────────────────────────────────────────────────────────────────
 async function loadFees() {
   const tbody = document.getElementById('fees-tbody');
-  tbody.innerHTML = `<tr><td colspan="7" class="loading-row"><span class="spinner"></span></td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" class="loading-row"><span class="spinner"></span></td></tr>`;
   const data = await apiFetch('GET', '/api/fees').catch(() => []);
   state.fees = data;
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💰</div><p>No fee structures yet. Click "+ Add Fee Structure" to begin.</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💰</div><p>No fee structures yet. Click "+ Add Fee Structure" to begin.</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = data.map(f => {
-    const annual = f.fixedComponent + (f.sessionFees * 10); // ~10 months full year
+    const annual = f.fixedComponent + (f.sessionFees * 10);
     return `
     <tr>
       <td><strong>${f.programName}</strong></td>
       <td><span class="badge badge-blue">${f.academicYear}</span></td>
       <td style="font-family:'Lora',serif;">${fmt(f.fixedComponent)}</td>
       <td style="font-family:'Lora',serif;">${fmt(f.sessionFees)}</td>
+      <td style="font-family:'Lora',serif;color:var(--navy);">${fmt(f.sportsFees || 0)}</td>
+      <td style="font-family:'Lora',serif;color:var(--navy);">${fmt(f.celebrationFees || 0)}</td>
       <td style="font-family:'Lora',serif;color:var(--green);font-weight:600;">${fmt(annual)}</td>
       <td style="color:var(--text-muted);font-size:0.8rem;">${f.notes || '—'}</td>
       <td>
@@ -1072,17 +1088,22 @@ async function loadProgramsIntoSelects() {
     programs.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
 }
 
-function openFeeModal(f = null) {
-  loadProgramsIntoSelects();
+async function openFeeModal(f = null) {
+  // BUGFIX: await programs before setting select value so option exists
+  await loadProgramsIntoSelects();
   document.getElementById('modal-fee-title').textContent = f ? 'Edit Fee Structure' : 'Add Fee Structure';
   document.getElementById('fee-id').value = f?.id || '';
-  document.getElementById('fee-program').value = f?.programName || '';
-  // Auto-set current academic year
+  // Set programme select AFTER options are loaded
+  if (f?.programName) {
+    document.getElementById('fee-program').value = f.programName;
+  }
   const now = new Date();
   const ayStart = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
   document.getElementById('fee-year').value = f?.academicYear || `${ayStart}-${String(ayStart+1).slice(-2)}`;
-  document.getElementById('fee-fixed').value = f?.fixedComponent || '';
-  document.getElementById('fee-session').value = f?.sessionFees || '';
+  document.getElementById('fee-fixed').value = f?.fixedComponent ?? '';
+  document.getElementById('fee-session').value = f?.sessionFees ?? '';
+  document.getElementById('fee-sports').value = f?.sportsFees ?? '';
+  document.getElementById('fee-celebration').value = f?.celebrationFees ?? '';
   document.getElementById('fee-notes').value = f?.notes || '';
   updateFeePreview();
   openModal('modal-fee');
@@ -1091,11 +1112,18 @@ function openFeeModal(f = null) {
 function editFee(f) { openFeeModal(f); }
 
 function updateFeePreview() {
-  const fixed = parseFloat(document.getElementById('fee-fixed').value) || 0;
-  const sess  = parseFloat(document.getElementById('fee-session').value) || 0;
+  const fixed   = parseFloat(document.getElementById('fee-fixed').value) || 0;
+  const sess    = parseFloat(document.getElementById('fee-session').value) || 0;
+  const sports  = parseFloat(document.getElementById('fee-sports').value) || 0;
+  const celeb   = parseFloat(document.getElementById('fee-celebration').value) || 0;
   if (fixed || sess) {
+    const baseAnnual = fixed + sess * 10;
+    const totalAnnual = baseAnnual + sports + celeb;
     document.getElementById('fee-preview').innerHTML =
-      `📌 Estimated full-year total (10 months): <strong>${fmt(fixed + sess * 10)}</strong> &nbsp;|&nbsp; Fixed: ${fmt(fixed)} &nbsp;+&nbsp; Sessions (10 × ${fmt(sess)}): ${fmt(sess * 10)}`;
+      `📌 Base annual (10 months): <strong>${fmt(baseAnnual)}</strong> &nbsp;|&nbsp; ` +
+      `Sports: <strong>${fmt(sports)}</strong> &nbsp;|&nbsp; ` +
+      `Celebration: <strong>${fmt(celeb)}</strong> &nbsp;|&nbsp; ` +
+      `<strong style="color:var(--navy);">Grand Total: ${fmt(totalAnnual)}</strong>`;
   } else {
     document.getElementById('fee-preview').innerHTML = '';
   }
@@ -1112,6 +1140,8 @@ async function saveFee() {
     academicYear: document.getElementById('fee-year').value.trim(),
     fixedComponent: parseFloat(document.getElementById('fee-fixed').value),
     sessionFees: parseFloat(document.getElementById('fee-session').value),
+    sportsFees: parseFloat(document.getElementById('fee-sports').value) || 0,
+    celebrationFees: parseFloat(document.getElementById('fee-celebration').value) || 0,
     notes: document.getElementById('fee-notes').value.trim(),
   };
   if (!payload.programName || !payload.academicYear || isNaN(payload.fixedComponent) || isNaN(payload.sessionFees)) {
@@ -1268,7 +1298,7 @@ function toggleChip(el) {
 // Set default joining date = June 1 of current academic year
 function setDefaultJoiningDate() {
   const now = new Date();
-  const year = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+  const year = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear();
   document.getElementById('calc-joining').value = `${year}-06-01`;
 }
 
@@ -1311,7 +1341,13 @@ function clearCalculator() {
   document.getElementById('calc-result').innerHTML = '';
 }
 
+// Holds the last calculation result for quotation generation
+let lastResult = null;
+let currentBookingAmount = 0;
+
 function renderCalcResult(r) {
+  lastResult = r;
+  currentBookingAmount = r.bookingAmount;
   const container = document.getElementById('calc-result');
   container.style.display = 'block';
 
@@ -1333,10 +1369,9 @@ function renderCalcResult(r) {
       }).join('')
     : `<tr><td class="label" style="padding-left:32px;">No discounts applied</td><td class="value" style="color:var(--text-muted);">—</td></tr>`;
 
-  const installmentNote = !r.feeConfigured ? '' : `
-    <tr class="separator"><td colspan="2">Payment Breakdown (Installments on remaining after booking)</td></tr>
-    <tr><td class="label">Remaining After Booking</td><td class="value">${fmt(r.discountedFees - r.bookingAmount)}</td></tr>
-  `;
+  // Programme comparison — show only selected programme fee details prominently
+  const govtSelected  = r.selectedProgram === r.govtRecommendedProgram;
+  const useGovt = document.querySelector('input[name="prog-method"]:checked').value === 'govt';
 
   container.innerHTML = `
     ${feeWarning}
@@ -1345,25 +1380,25 @@ function renderCalcResult(r) {
     <div class="result-block">
       <div class="result-block-header">📋 Fee Structure — ${studentLabel}</div>
       <table class="result-table">
-        <tr><td class="label">Student Age (as of today)</td>
+        <tr><td class="label">Student Age (as of joining date)</td>
             <td class="value highlight">${r.ageDisplay}</td></tr>
-        <tr><td class="label">Total Age</td>
+        <tr><td class="label">Total Age at Joining</td>
             <td class="value">${r.totalAgeMonths} months</td></tr>
         <tr class="separator"><td colspan="2">Programme Recommendation</td></tr>
       </table>
 
       <div class="program-comparison">
-        <div class="prog-box ${r.govtRecommendedProgram === r.selectedProgram ? 'selected' : ''}">
+        <div class="prog-box ${useGovt ? 'selected' : ''}">
           <div class="prog-box-label">🏛️ Govt Recommended</div>
           <div class="prog-box-value">${r.govtRecommendedProgram}</div>
           <div class="prog-box-sub">Age as of ${r.govtJune1Date}: <strong>${r.govtAgeMonths} months</strong></div>
-          ${r.govtRecommendedProgram === r.selectedProgram ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED</div>' : ''}
+          ${useGovt ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED — fees shown below</div>' : ''}
         </div>
-        <div class="prog-box ${r.actualAgeProgram === r.selectedProgram && r.govtRecommendedProgram !== r.actualAgeProgram ? 'selected' : ''}">
+        <div class="prog-box ${!useGovt ? 'selected' : ''}">
           <div class="prog-box-label">📅 Based on Actual Age</div>
           <div class="prog-box-value">${r.actualAgeProgram}</div>
-          <div class="prog-box-sub">Age as of today: <strong>${r.actualAgeMonths} months</strong></div>
-          ${r.actualAgeProgram === r.selectedProgram && r.govtRecommendedProgram !== r.actualAgeProgram ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED</div>' : ''}
+          <div class="prog-box-sub">Age as of joining date: <strong>${r.actualAgeMonths} months</strong></div>
+          ${!useGovt ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED — fees shown below</div>' : ''}
         </div>
       </div>
 
@@ -1375,20 +1410,29 @@ function renderCalcResult(r) {
         <tr><td class="label">End Date</td><td class="value">${r.endDate}</td></tr>
         <tr><td class="label">Duration</td>
             <td class="value">${r.durationDescription}</td></tr>
-        <tr class="separator"><td colspan="2">Fee Computation</td></tr>
+        <tr class="separator"><td colspan="2">Fee Computation for: ${r.selectedProgram}</td></tr>
         <tr><td class="label">Fixed Component</td>
             <td class="value money">${fmt(r.fixedComponent)}</td></tr>
         <tr><td class="label">Session Fees (${fmt(r.sessionFees)} × ${r.durationMonths} months)</td>
             <td class="value money">${fmt(r.sessionFees * r.durationMonths)}</td></tr>
-        <tr><td class="label"><strong>Total Base Fees</strong></td>
+        <tr><td class="label"><strong>Total Base Fees</strong> <span style="font-size:0.72rem;color:var(--text-muted);">(excl. Sports &amp; Celebration)</span></td>
             <td class="value total">${fmt(r.totalBaseFees)}</td></tr>
         <tr class="separator"><td colspan="2">Discounts Applied</td></tr>
         ${discountRows}
         <tr><td class="label"><strong>Total Discount</strong></td>
             <td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
         <tr style="background:var(--surface2);">
-          <td class="label"><strong>Discounted Fees</strong></td>
+          <td class="label"><strong>Discounted Base Fees</strong></td>
           <td class="value total">${fmt(r.discountedFees)}</td>
+        </tr>
+        <tr class="separator"><td colspan="2">Additional Annual Charges (not included in base fees)</td></tr>
+        <tr><td class="label">Sports Fees <span style="font-size:0.72rem;color:var(--text-muted);">(added to Inst. 2)</span></td>
+            <td class="value" style="color:var(--navy);">+ ${fmt(r.sportsFees)}</td></tr>
+        <tr><td class="label">Celebration Fees <span style="font-size:0.72rem;color:var(--text-muted);">(added to Inst. 3)</span></td>
+            <td class="value" style="color:var(--navy);">+ ${fmt(r.celebrationFees)}</td></tr>
+        <tr style="background:#e8f0ff;">
+          <td class="label"><strong>Grand Total Payable</strong></td>
+          <td class="value total">${fmt(r.totalPayable)}</td>
         </tr>
       </table>
     </div>
@@ -1398,41 +1442,228 @@ function renderCalcResult(r) {
       <div class="result-block-header">💳 Payment Schedule</div>
       <table class="result-table">
         <tr>
-          <td class="label">Booking Amount <span style="font-size:0.72rem;opacity:0.7;">(Fixed Component)</span></td>
-          <td class="value money">${fmt(r.bookingAmount)}</td>
+          <td class="label">
+            Booking Amount
+            <span style="font-size:0.72rem;opacity:0.7;">(Fixed Component — editable)</span>
+          </td>
+          <td class="value">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="booking-input"
+                value="${r.bookingAmount}"
+                min="0" max="${r.bookingAmount}"
+                step="0.01"
+                style="width:130px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.875rem;"
+                oninput="recalcInstallments()"
+              >
+              <span style="font-size:0.75rem;color:var(--text-muted);">max ${fmt(r.bookingAmount)}</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">If less than max, shortfall is added to Installment 1</div>
+          </td>
         </tr>
-        ${installmentNote}
-        <tr>
-          <td class="label">Installment 1 <span style="font-size:0.72rem;opacity:0.7;">(40%)</span></td>
-          <td class="value money">${fmt(r.installment1)}</td>
+        <tr><td class="label">Installment 1 <span style="font-size:0.72rem;opacity:0.7;">(40% of variable)</span></td>
+            <td class="value money" id="disp-inst1">${fmt(r.installment1)}</td></tr>
+        <tr style="background:var(--surface2);">
+          <td class="label" colspan="2" style="padding:8px 20px;font-size:0.75rem;color:var(--text-muted);">
+            📌 Installment 1 &amp; Remaining Seat Booking Amount to be paid while collecting school dress and study materials.
+          </td>
         </tr>
         <tr>
-          <td class="label">Installment 2 <span style="font-size:0.72rem;opacity:0.7;">(30%)</span></td>
-          <td class="value money">${fmt(r.installment2)}</td>
+          <td class="label">
+            Installment 2
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">
+              Tuition 30%: ${fmt(r.installment2Variable)}<br>
+              + Sports Fees: ${fmt(r.sportsFees)}
+            </div>
+          </td>
+          <td class="value money" id="disp-inst2">${fmt(r.installment2)}</td>
         </tr>
         <tr>
-          <td class="label">Installment 3 <span style="font-size:0.72rem;opacity:0.7;">(30%)</span></td>
-          <td class="value money">${fmt(r.installment3)}</td>
+          <td class="label">
+            Installment 3
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">
+              Tuition 30%: ${fmt(r.installment3Variable)}<br>
+              + Celebration Fees: ${fmt(r.celebrationFees)}
+            </div>
+          </td>
+          <td class="value money" id="disp-inst3">${fmt(r.installment3)}</td>
         </tr>
         <tr style="background:linear-gradient(90deg,#f0f4ff,#e8f0ff);">
-          <td class="label"><strong>Total Payable</strong></td>
+          <td class="label"><strong>Grand Total Payable</strong></td>
           <td class="value total">${fmt(r.totalPayable)}</td>
-        </tr>
-        <tr>
-          <td colspan="2" style="font-size:0.75rem;color:var(--text-muted);padding:10px 20px;">
-            * Installments are calculated on the remaining balance (Total Payable − Booking Amount = ${fmt(r.discountedFees - r.bookingAmount)})
-          </td>
         </tr>
       </table>
     </div>
 
-    <div style="display:flex;gap:10px;margin-top:8px;" class="no-print">
-      <button class="btn btn-outline" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;" class="no-print">
+      <button class="btn btn-gold" onclick="openQuotation()">📄 Download Quotation</button>
+      <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
       <button class="btn btn-outline" onclick="clearCalculator()">✕ Clear</button>
     </div>
   `;
 
   container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function recalcInstallments() {
+  if (!lastResult) return;
+  const r = lastResult;
+  const bookingPaid = Math.min(parseFloat(document.getElementById('booking-input').value) || 0, r.bookingAmount);
+  const shortfall   = r.bookingAmount - bookingPaid;
+  const inst1 = round2(r.installment1Variable + shortfall);
+  document.getElementById('disp-inst1').textContent = fmt(inst1);
+  currentBookingAmount = bookingPaid;
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
+function openQuotation() {
+  if (!lastResult) return;
+  const r = lastResult;
+  const bookingPaid = parseFloat(document.getElementById('booking-input')?.value) || r.bookingAmount;
+  const shortfall   = r.bookingAmount - bookingPaid;
+  const inst1Display = round2(r.installment1Variable + shortfall);
+  const today = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' });
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Fee Quotation — ${r.studentName || 'Student'}</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;color:#1a1f3a;background:#fff;padding:32px;font-size:14px;}
+  .header{text-align:center;border-bottom:3px solid #1B2D6B;padding-bottom:16px;margin-bottom:20px;}
+  .school-name{font-family:'Lora',serif;font-size:1.8rem;font-weight:700;color:#1B2D6B;}
+  .doc-title{font-size:1rem;font-weight:600;color:#D4921A;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+  .date-line{font-size:0.82rem;color:#6b748e;margin-top:4px;}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;background:#f4f5f9;border-radius:8px;padding:14px;}
+  .info-row{display:flex;flex-direction:column;gap:2px;}
+  .info-label{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b748e;font-weight:600;}
+  .info-value{font-weight:600;color:#1a1f3a;font-size:0.9rem;}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+  th{background:#1B2D6B;color:#fff;padding:9px 14px;text-align:left;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;}
+  td{padding:9px 14px;border-bottom:1px solid #dce0ee;font-size:0.85rem;}
+  tr:last-child td{border-bottom:none;}
+  .label{color:#6b748e;font-weight:500;width:50%;}
+  .value{font-weight:600;}
+  .money{font-family:'Lora',serif;color:#1e7a4a;}
+  .discount{color:#c0392b;}
+  .total-row td{background:#e8f0ff;font-weight:700;font-size:0.95rem;}
+  .section-header{background:#f0f2f8;font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;color:#1B2D6B;}
+  .sub-detail{font-size:0.72rem;color:#6b748e;margin-top:3px;}
+  .footer{margin-top:20px;border-top:2px solid #dce0ee;padding-top:14px;font-size:0.78rem;color:#6b748e;line-height:1.7;}
+  .footer strong{color:#1B2D6B;}
+  .footer-note{margin-top:8px;font-style:italic;}
+  @media print{body{padding:16px;}.no-print{display:none;}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="school-name">🏫 School Management System</div>
+  <div class="doc-title">Fee Quotation — AY ${r.academicYear}</div>
+  <div class="date-line">Date: ${today}</div>
+</div>
+
+<div class="info-grid">
+  <div class="info-row">
+    <div class="info-label">Student Name</div>
+    <div class="info-value">${r.studentName || '—'}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Programme</div>
+    <div class="info-value">${r.selectedProgram}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Academic Year</div>
+    <div class="info-value">${r.academicYear}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Date of Joining</div>
+    <div class="info-value">${fmtDate(r.joiningDate)}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Date of Birth</div>
+    <div class="info-value">${fmtDate(r.dateOfBirth)}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Duration</div>
+    <div class="info-value">${r.durationDescription}</div>
+  </div>
+</div>
+
+<table>
+  <tr><th colspan="2">Fee Summary</th></tr>
+  <tr><td class="label">Base Fees (Fixed + ${r.durationMonths} months session)</td><td class="value money">${fmt(r.totalBaseFees)}</td></tr>
+  <tr><td class="label">Total Discounts</td><td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
+  <!--tr><td class="label">Final Base Fees (after discount)</td><td class="value money">${fmt(r.discountedFees)}</td></tr-->
+  <tr class="total-row"><td>Final Base Fees (after discount)</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.discountedFees)}</td></tr>
+  <!--tr><td class="label">Sports Fees (flat annual)</td><td class="value">+ ${fmt(r.sportsFees)}</td></tr-->
+  <!--tr><td class="label">Celebration Fees (flat annual)</td><td class="value">+ ${fmt(r.celebrationFees)}</td></tr-->
+  <!--tr class="total-row"><td>Grand Total Payable</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr-->
+</table>
+
+<table>
+  <tr><th colspan="2">Payment Schedule</th></tr>
+  <tr>
+    <td class="label">
+      Booking Amount (Paid)
+    </td>
+    <td class="value money">${fmt(bookingPaid)}</td>
+  </tr>
+  <tr>
+    <td class="label">
+      Installment 1
+      <div class="sub-detail">Tuition 40%: ${fmt(r.installment1Variable)}${shortfall > 0 ? ` + Balance from booking: ${fmt(shortfall)}` : ''}</div>
+    </td>
+    <td class="value money">${fmt(inst1Display)}</td>
+  </tr>
+  <tr>
+    <td class="label">
+      Installment 2
+      <div class="sub-detail">Tuition 30%: ${fmt(r.installment2Variable)} + Sports Fees: ${fmt(r.sportsFees)}</div>
+    </td>
+    <td class="value money">${fmt(r.installment2)}</td>
+  </tr>
+  <tr>
+    <td class="label">
+      Installment 3
+      <div class="sub-detail">Tuition 30%: ${fmt(r.installment3Variable)} + Celebration Fees: ${fmt(r.celebrationFees)}</div>
+    </td>
+    <td class="value money">${fmt(r.installment3)}</td>
+  </tr>
+  <!--tr class="total-row"><td>Grand Total</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr-->
+</table>
+
+<div class="footer">
+  <p><strong>** Installment 1 &amp; Remaining Seat Booking Amount to be paid while collecting the school dress and study materials.</strong></p>
+  <!--br-->
+  <p><strong>****************** AY ${r.academicYear} Annual Fees Includes ******************</strong></p>
+  <ul style="padding-left:18px;margin-top:6px;line-height:2;">
+    <li>Two sets of school dress</li>
+    <li>1 Bag</li>
+    <li>Books and Study Materials</li>
+    <li>Stationaries required for day to day activities in school</li>
+    <li>APP Access for Parent</li>
+  </ul>
+  <!--br-->
+  <p><strong>Other Notes:</strong></p>
+  <p>Sports Fees - ${fmt(r.sportsFees)} and Celebration Fees - ${fmt(r.celebrationFees)} included in Inst 2 &amp; Inst 3.</p>
+  <p>Each installment Fees to be paid within 1 week of invoice generated date.</p>
+  <p>Admission Fees and Booking Amount Paid is NON-REFUNDABLE.</p>
+  <p>DayCare &amp; Van charges are NOT included in above quotation. Contact Office for more details.</p>
+  <p class="footer-note">This is a computer-generated quotation. Generated on: ${today}</p>
+</div>
+
+<div class="no-print" style="text-align:center;margin-top:24px;">
+  <button onclick="window.print()" style="padding:10px 28px;background:#1B2D6B;color:#fff;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;">🖨️ Print / Save as PDF</button>
+</div>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 function fmtDate(s) {

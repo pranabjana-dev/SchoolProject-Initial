@@ -44,11 +44,16 @@ public class FeeCalculationResult {
     private double discountedFees;       // totalBaseFees - totalDiscountAmount
 
     // Payment schedule
-    private double bookingAmount;        // = fixedComponent
-    private double installment1;         // 40% of (discountedFees - fixedComponent)
-    private double installment2;         // 30% of (discountedFees - fixedComponent)
-    private double installment3;         // 30% of (discountedFees - fixedComponent)
-    private double totalPayable;         // = discountedFees
+    private double bookingAmount;        // = fixedComponent (editable by user in UI)
+    private double installment1Variable; // 40% of variable portion
+    private double installment1;         // installment1Variable + any unpaid booking remainder
+    private double installment2Variable; // 30% of variable portion (before sports)
+    private double sportsFees;           // flat annual sports fee
+    private double installment2;         // installment2Variable + sportsFees
+    private double installment3Variable; // 30% of variable portion (before celebration)
+    private double celebrationFees;      // flat annual celebration fee
+    private double installment3;         // installment3Variable + celebrationFees
+    private double totalPayable;         // discountedFees + sportsFees + celebrationFees
 
     // ---- Getters & Setters ----
     public String getStudentName() { return studentName; }
@@ -129,11 +134,26 @@ public class FeeCalculationResult {
     public double getBookingAmount() { return bookingAmount; }
     public void setBookingAmount(double bookingAmount) { this.bookingAmount = bookingAmount; }
 
+    public double getInstallment1Variable() { return installment1Variable; }
+    public void setInstallment1Variable(double installment1Variable) { this.installment1Variable = installment1Variable; }
+
     public double getInstallment1() { return installment1; }
     public void setInstallment1(double installment1) { this.installment1 = installment1; }
 
+    public double getInstallment2Variable() { return installment2Variable; }
+    public void setInstallment2Variable(double installment2Variable) { this.installment2Variable = installment2Variable; }
+
+    public double getSportsFees() { return sportsFees; }
+    public void setSportsFees(double sportsFees) { this.sportsFees = sportsFees; }
+
     public double getInstallment2() { return installment2; }
     public void setInstallment2(double installment2) { this.installment2 = installment2; }
+
+    public double getInstallment3Variable() { return installment3Variable; }
+    public void setInstallment3Variable(double installment3Variable) { this.installment3Variable = installment3Variable; }
+
+    public double getCelebrationFees() { return celebrationFees; }
+    public void setCelebrationFees(double celebrationFees) { this.celebrationFees = celebrationFees; }
 
     public double getInstallment3() { return installment3; }
     public void setInstallment3(double installment3) { this.installment3 = installment3; }
