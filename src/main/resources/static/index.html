@@ -467,9 +467,11 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
 ══════════════════════════════════════════ -->
 <header class="header">
   <div class="header-brand">
-    <div class="header-icon">🏫</div>
+    <img src="/logo.png" alt="School Logo"
+       style="width:48px;height:48px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.25);"
+       onerror="this.outerHTML='<div class=\'header-icon\'>🏫</div>'">
     <div>
-      <div class="header-title">TinyTroves Management System</div>
+      <div class="header-title">School Management System</div>
       <div class="header-sub">Admissions &amp; Fee Management</div>
     </div>
   </div>
@@ -1298,7 +1300,7 @@ function toggleChip(el) {
 // Set default joining date = June 1 of current academic year
 function setDefaultJoiningDate() {
   const now = new Date();
-  const year = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear();
+  const year = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
   document.getElementById('calc-joining').value = `${year}-06-01`;
 }
 
@@ -1596,11 +1598,10 @@ function openQuotation() {
   <tr><th colspan="2">Fee Summary</th></tr>
   <tr><td class="label">Base Fees (Fixed + ${r.durationMonths} months session)</td><td class="value money">${fmt(r.totalBaseFees)}</td></tr>
   <tr><td class="label">Total Discounts</td><td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
-  <!--tr><td class="label">Final Base Fees (after discount)</td><td class="value money">${fmt(r.discountedFees)}</td></tr-->
-  <tr class="total-row"><td>Final Base Fees (after discount)</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.discountedFees)}</td></tr>
-  <!--tr><td class="label">Sports Fees (flat annual)</td><td class="value">+ ${fmt(r.sportsFees)}</td></tr-->
-  <!--tr><td class="label">Celebration Fees (flat annual)</td><td class="value">+ ${fmt(r.celebrationFees)}</td></tr-->
-  <!--tr class="total-row"><td>Grand Total Payable</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr-->
+  <tr><td class="label">Final Base Fees (after discount)</td><td class="value money">${fmt(r.discountedFees)}</td></tr>
+  <tr><td class="label">Sports Fees (flat annual)</td><td class="value">+ ${fmt(r.sportsFees)}</td></tr>
+  <tr><td class="label">Celebration Fees (flat annual)</td><td class="value">+ ${fmt(r.celebrationFees)}</td></tr>
+  <tr class="total-row"><td>Grand Total Payable</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr>
 </table>
 
 <table>
@@ -1632,12 +1633,12 @@ function openQuotation() {
     </td>
     <td class="value money">${fmt(r.installment3)}</td>
   </tr>
-  <!--tr class="total-row"><td>Grand Total</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr-->
+  <tr class="total-row"><td>Grand Total</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr>
 </table>
 
 <div class="footer">
   <p><strong>** Installment 1 &amp; Remaining Seat Booking Amount to be paid while collecting the school dress and study materials.</strong></p>
-  <!--br-->
+  <br>
   <p><strong>****************** AY ${r.academicYear} Annual Fees Includes ******************</strong></p>
   <ul style="padding-left:18px;margin-top:6px;line-height:2;">
     <li>Two sets of school dress</li>
@@ -1646,7 +1647,7 @@ function openQuotation() {
     <li>Stationaries required for day to day activities in school</li>
     <li>APP Access for Parent</li>
   </ul>
-  <!--br-->
+  <br>
   <p><strong>Other Notes:</strong></p>
   <p>Sports Fees - ${fmt(r.sportsFees)} and Celebration Fees - ${fmt(r.celebrationFees)} included in Inst 2 &amp; Inst 3.</p>
   <p>Each installment Fees to be paid within 1 week of invoice generated date.</p>
