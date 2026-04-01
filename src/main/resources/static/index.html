@@ -467,9 +467,9 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
 ══════════════════════════════════════════ -->
 <header class="header">
   <div class="header-brand">
-    <img src="/logo.png" alt="School Logo"
-       style="width:48px;height:48px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.25);"
-       onerror="this.outerHTML='<div class=\'header-icon\'>🏫</div>'">
+    <img src="/logo.jpg" alt="School Logo"
+       style="width:192px;height:70px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.25);"
+       >
     <div>
       <div class="header-title">School Management System</div>
       <div class="header-sub">Admissions &amp; Fee Management</div>
@@ -705,7 +705,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
       <div class="form-group">
         <label>Date of Joining <span style="color:var(--red);">*</span></label>
         <input type="date" id="calc-joining" required>
-        <div class="hint">Defaults to June 1 of current academic year</div>
+        <div class="hint">Defaults to 01 Jun 2026</div>
       </div>
     </div>
 
@@ -1297,11 +1297,9 @@ function toggleChip(el) {
   }
 }
 
-// Set default joining date = June 1 of current academic year
+// Set default joining date = June 1 2026
 function setDefaultJoiningDate() {
-  const now = new Date();
-  const year = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
-  document.getElementById('calc-joining').value = `${year}-06-01`;
+  document.getElementById('calc-joining').value = '2026-06-01';
 }
 
 async function runCalculation() {
@@ -1533,40 +1531,54 @@ function openQuotation() {
 <title>Fee Quotation — ${r.studentName || 'Student'}</title>
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
+  @page { size: A4; margin: 12mm 14mm; }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'DM Sans',sans-serif;color:#1a1f3a;background:#fff;padding:32px;font-size:14px;}
-  .header{text-align:center;border-bottom:3px solid #1B2D6B;padding-bottom:16px;margin-bottom:20px;}
-  .school-name{font-family:'Lora',serif;font-size:1.8rem;font-weight:700;color:#1B2D6B;}
-  .doc-title{font-size:1rem;font-weight:600;color:#D4921A;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
-  .date-line{font-size:0.82rem;color:#6b748e;margin-top:4px;}
-  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;background:#f4f5f9;border-radius:8px;padding:14px;}
-  .info-row{display:flex;flex-direction:column;gap:2px;}
-  .info-label{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b748e;font-weight:600;}
-  .info-value{font-weight:600;color:#1a1f3a;font-size:0.9rem;}
-  table{width:100%;border-collapse:collapse;margin-bottom:16px;}
-  th{background:#1B2D6B;color:#fff;padding:9px 14px;text-align:left;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;}
-  td{padding:9px 14px;border-bottom:1px solid #dce0ee;font-size:0.85rem;}
+  body{font-family:'DM Sans',sans-serif;color:#1a1f3a;background:#fff;padding:18px 20px;font-size:12px;line-height:1.4;}
+  .top-bar{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2.5px solid #1B2D6B;padding-bottom:10px;margin-bottom:12px;}
+  .customer-copy{font-size:0.78rem;font-weight:700;color:#1B2D6B;text-transform:uppercase;letter-spacing:0.08em;padding-top:4px;}
+  .doc-center{text-align:center;flex:1;}
+  .doc-title{font-family:'Lora',serif;font-size:1rem;font-weight:700;color:#D4921A;letter-spacing:0.06em;text-transform:uppercase;}
+  .doc-sub{font-size:0.72rem;color:#6b748e;margin-top:2px;}
+  .date-line{font-size:0.72rem;color:#6b748e;margin-top:2px;}
+  .logo-area{flex-shrink:0;}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;background:#f4f5f9;border-radius:6px;padding:10px;}
+  .info-row{display:flex;flex-direction:column;gap:1px;}
+  .info-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:#6b748e;font-weight:600;}
+  .info-value{font-weight:600;color:#1a1f3a;font-size:0.82rem;}
+  table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+  th{background:#1B2D6B;color:#fff;padding:6px 10px;text-align:left;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;}
+  td{padding:6px 10px;border-bottom:1px solid #dce0ee;font-size:0.8rem;}
   tr:last-child td{border-bottom:none;}
-  .label{color:#6b748e;font-weight:500;width:50%;}
+  .label{color:#6b748e;font-weight:500;width:55%;}
   .value{font-weight:600;}
   .money{font-family:'Lora',serif;color:#1e7a4a;}
   .discount{color:#c0392b;}
-  .total-row td{background:#e8f0ff;font-weight:700;font-size:0.95rem;}
-  .section-header{background:#f0f2f8;font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.05em;color:#1B2D6B;}
-  .sub-detail{font-size:0.72rem;color:#6b748e;margin-top:3px;}
-  .footer{margin-top:20px;border-top:2px solid #dce0ee;padding-top:14px;font-size:0.78rem;color:#6b748e;line-height:1.7;}
+  .total-row td{background:#e8f0ff;font-weight:700;font-size:0.85rem;}
+  .sub-detail{font-size:0.68rem;color:#6b748e;margin-top:2px;}
+  .footer{margin-top:10px;border-top:1.5px solid #dce0ee;padding-top:8px;font-size:0.72rem;color:#6b748e;line-height:1.6;}
   .footer strong{color:#1B2D6B;}
-  .footer-note{margin-top:8px;font-style:italic;}
-  @media print{body{padding:16px;}.no-print{display:none;}}
+  .footer ul{padding-left:14px;margin:3px 0;}
+  .footer li{font-size:0.72rem;}
+  .footer-note{margin-top:4px;font-style:italic;font-size:0.68rem;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media print{.no-print{display:none;} body{padding:0;}}
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="school-name">🏫 School Management System</div>
-  <div class="doc-title">Fee Quotation — AY ${r.academicYear}</div>
-  <div class="date-line">Date: ${today}</div>
+
+<!-- TOP BAR: Customer Copy | Title | Logo -->
+<div class="top-bar">
+  <div class="customer-copy">Customer Copy</div>
+  <div class="doc-center">
+    <div class="doc-title">Fee Quotation — AY ${r.academicYear}</div>
+    <div class="date-line">Date: ${today}</div>
+  </div>
+  <div class="logo-area">
+    <img src="/logo.jpg" alt="Logo" style="width:192px;height:70px;object-fit:contain;display:block;">
+  </div>
 </div>
 
+<!-- STUDENT INFO -->
 <div class="info-grid">
   <div class="info-row">
     <div class="info-label">Student Name</div>
@@ -1581,12 +1593,12 @@ function openQuotation() {
     <div class="info-value">${r.academicYear}</div>
   </div>
   <div class="info-row">
-    <div class="info-label">Date of Joining</div>
-    <div class="info-value">${fmtDate(r.joiningDate)}</div>
-  </div>
-  <div class="info-row">
     <div class="info-label">Date of Birth</div>
     <div class="info-value">${fmtDate(r.dateOfBirth)}</div>
+  </div>
+  <div class="info-row">
+    <div class="info-label">Date of Joining</div>
+    <div class="info-value">${fmtDate(r.joiningDate)}</div>
   </div>
   <div class="info-row">
     <div class="info-label">Duration</div>
@@ -1594,70 +1606,69 @@ function openQuotation() {
   </div>
 </div>
 
-<table>
-  <tr><th colspan="2">Fee Summary</th></tr>
-  <tr><td class="label">Base Fees (Fixed + ${r.durationMonths} months session)</td><td class="value money">${fmt(r.totalBaseFees)}</td></tr>
-  <tr><td class="label">Total Discounts</td><td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
-  <tr><td class="label">Final Base Fees (after discount)</td><td class="value money">${fmt(r.discountedFees)}</td></tr>
-  <tr><td class="label">Sports Fees (flat annual)</td><td class="value">+ ${fmt(r.sportsFees)}</td></tr>
-  <tr><td class="label">Celebration Fees (flat annual)</td><td class="value">+ ${fmt(r.celebrationFees)}</td></tr>
-  <tr class="total-row"><td>Grand Total Payable</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr>
-</table>
+<!-- FEE SUMMARY + PAYMENT SCHEDULE side by side -->
+<div class="two-col">
+  <div>
+    <table>
+      <tr><th colspan="2">Fee Summary</th></tr>
+      <tr><td class="label">Base Fees (Fixed + ${r.durationMonths} months session)</td><td class="value money">${fmt(r.totalBaseFees)}</td></tr>
+      <tr><td class="label">Total Discounts</td><td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
+      <tr class="total-row"><td>Final Fees (after discount)</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.discountedFees)}</td></tr>
+    </table>
+    <div style="margin-top:6px;padding:7px 10px;background:#fff8e6;border-left:3px solid #D4921A;border-radius:0 5px 5px 0;font-size:0.72rem;color:#7a5000;line-height:1.6;">
+      <strong style="display:block;margin-bottom:2px;">⚠ Additional Charges (included in installments)</strong>
+      🏅 Sports Fees <span style="float:right;font-family:'Lora',serif;font-weight:700;">+ ${fmt(r.sportsFees)}</span><br>
+      🎉 Celebration Fees <span style="float:right;font-family:'Lora',serif;font-weight:700;">+ ${fmt(r.celebrationFees)}</span>
+    </div>
+  </div>
 
-<table>
-  <tr><th colspan="2">Payment Schedule</th></tr>
-  <tr>
-    <td class="label">
-      Booking Amount (Paid)
-    </td>
-    <td class="value money">${fmt(bookingPaid)}</td>
-  </tr>
-  <tr>
-    <td class="label">
-      Installment 1
-      <div class="sub-detail">Tuition 40%: ${fmt(r.installment1Variable)}${shortfall > 0 ? ` + Balance from booking: ${fmt(shortfall)}` : ''}</div>
-    </td>
-    <td class="value money">${fmt(inst1Display)}</td>
-  </tr>
-  <tr>
-    <td class="label">
-      Installment 2
-      <div class="sub-detail">Tuition 30%: ${fmt(r.installment2Variable)} + Sports Fees: ${fmt(r.sportsFees)}</div>
-    </td>
-    <td class="value money">${fmt(r.installment2)}</td>
-  </tr>
-  <tr>
-    <td class="label">
-      Installment 3
-      <div class="sub-detail">Tuition 30%: ${fmt(r.installment3Variable)} + Celebration Fees: ${fmt(r.celebrationFees)}</div>
-    </td>
-    <td class="value money">${fmt(r.installment3)}</td>
-  </tr>
-  <tr class="total-row"><td>Grand Total</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.totalPayable)}</td></tr>
-</table>
+  <table>
+    <tr><th colspan="2">Payment Schedule</th></tr>
+    <tr>
+      <td class="label">Booking Amount (Paid)</td>
+      <td class="value money">${fmt(bookingPaid)}</td>
+    </tr>
+    <tr>
+      <td class="label">
+        Installment 1
+        <div class="sub-detail">Tuition 40%: ${fmt(r.installment1Variable)}${shortfall > 0 ? ` + Booking balance: ${fmt(shortfall)}` : ''}</div>
+      </td>
+      <td class="value money">${fmt(inst1Display)}</td>
+    </tr>
+    <tr>
+      <td class="label">
+        Installment 2
+        <div class="sub-detail">Tuition 30%: ${fmt(r.installment2Variable)} + Sports: ${fmt(r.sportsFees)}</div>
+      </td>
+      <td class="value money">${fmt(r.installment2)}</td>
+    </tr>
+    <tr>
+      <td class="label">
+        Installment 3
+        <div class="sub-detail">Tuition 30%: ${fmt(r.installment3Variable)} + Celebration: ${fmt(r.celebrationFees)}</div>
+      </td>
+      <td class="value money">${fmt(r.installment3)}</td>
+    </tr>
+  </table>
+</div>
 
+<!-- FOOTER -->
 <div class="footer">
   <p><strong>** Installment 1 &amp; Remaining Seat Booking Amount to be paid while collecting the school dress and study materials.</strong></p>
-  <br>
-  <p><strong>****************** AY ${r.academicYear} Annual Fees Includes ******************</strong></p>
-  <ul style="padding-left:18px;margin-top:6px;line-height:2;">
-    <li>Two sets of school dress</li>
-    <li>1 Bag</li>
-    <li>Books and Study Materials</li>
-    <li>Stationaries required for day to day activities in school</li>
-    <li>APP Access for Parent</li>
+  <p style="margin-top:5px;"><strong>****************** AY ${r.academicYear} Annual Fees Includes ******************</strong></p>
+  <ul style="margin-top:3px;">
+    <li>Two sets of school dress &nbsp;|&nbsp; 1 Bag &nbsp;|&nbsp; Books and Study Materials &nbsp;|&nbsp; Stationaries required for day to day activities in school &nbsp;|&nbsp; APP Access for Parent</li>
   </ul>
-  <br>
-  <p><strong>Other Notes:</strong></p>
+  <p style="margin-top:5px;"><strong>Other Notes:</strong></p>
   <p>Sports Fees - ${fmt(r.sportsFees)} and Celebration Fees - ${fmt(r.celebrationFees)} included in Inst 2 &amp; Inst 3.</p>
   <p>Each installment Fees to be paid within 1 week of invoice generated date.</p>
   <p>Admission Fees and Booking Amount Paid is NON-REFUNDABLE.</p>
   <p>DayCare &amp; Van charges are NOT included in above quotation. Contact Office for more details.</p>
-  <p class="footer-note">This is a computer-generated quotation. Generated on: ${today}</p>
+  <p class="footer-note">Computer-generated quotation. Generated on: ${today}</p>
 </div>
 
-<div class="no-print" style="text-align:center;margin-top:24px;">
-  <button onclick="window.print()" style="padding:10px 28px;background:#1B2D6B;color:#fff;border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;">🖨️ Print / Save as PDF</button>
+<div class="no-print" style="text-align:center;margin-top:16px;">
+  <button onclick="window.print()" style="padding:8px 24px;background:#1B2D6B;color:#fff;border:none;border-radius:8px;font-size:0.85rem;cursor:pointer;">🖨️ Print / Save as PDF</button>
 </div>
 </body>
 </html>`;
