@@ -13,7 +13,6 @@ public class DiscountService {
 
     private static final String FILE = "discounts.json";
     private final JsonStorageService storage;
-
     public DiscountService(JsonStorageService storage) {
         this.storage = storage;
         initializeDefaultDiscounts();
@@ -52,7 +51,14 @@ public class DiscountService {
 
     /** Get all discounts. */
     public List<Discount> getAll() {
-        return storage.readAll(FILE, new TypeReference<List<Discount>>() {});
+        long now = System.currentTimeMillis();
+	List<Discount> defaults = Arrays.asList(
+            makeDiscount("Loyalty Discount",    "LOYALTY",     "FIXED", 6000, "ALL",
+                         "Returning student loyalty discount", now),
+            makeDiscount("Early Bird Discount", "EARLY_BIRD",  "FIXED", 3000, "ALL",
+                         "Early admission discount offer",     now)
+        );
+	return defaults;
     }
 
     /** Get only active discounts. */

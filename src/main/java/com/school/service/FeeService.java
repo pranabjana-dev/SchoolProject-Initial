@@ -13,7 +13,6 @@ public class FeeService {
 
     private static final String FILE = "fees.json";
     private final JsonStorageService storage;
-
     public FeeService(JsonStorageService storage) {
         this.storage = storage;
         initializeDefaultFees();
@@ -23,10 +22,9 @@ public class FeeService {
     private void initializeDefaultFees() {
         List<FeeStructure> existing = getAll();
         if (!existing.isEmpty()) return;
-
         long now = System.currentTimeMillis();
         List<FeeStructure> defaults = Arrays.asList(
-            makeFee("Toddler",   "2026-27", 10000, 3000, 600, 2400, now),
+            makeFee("Toddler",   "2026-27", 10000, 4000, 600, 2400, now),
             makeFee("Play Group","2026-27", 10000, 4200, 600, 2400, now),
             makeFee("Nursery",   "2026-27", 10000, 4500, 600, 2400, now),
             makeFee("LKG",       "2026-27", 10000, 5100, 600, 2400, now),
@@ -54,7 +52,15 @@ public class FeeService {
 
     /** Get all fee structures. */
     public List<FeeStructure> getAll() {
-        return storage.readAll(FILE, new TypeReference<List<FeeStructure>>() {});
+        long now = System.currentTimeMillis();
+	List<FeeStructure> defaults = Arrays.asList(
+            makeFee("Toddler",   "2026-27", 10000, 4000, 600, 2400, now),
+            makeFee("Play Group","2026-27", 10000, 4200, 600, 2400, now),
+            makeFee("Nursery",   "2026-27", 10000, 4500, 600, 2400, now),
+            makeFee("LKG",       "2026-27", 10000, 5100, 600, 2400, now),
+            makeFee("UKG",       "2026-27", 10000, 5600, 600, 2400, now)
+        );
+	return defaults;
     }
 
     /** Get fee structures for a specific academic year. */

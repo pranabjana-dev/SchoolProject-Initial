@@ -1,4 +1,3 @@
-com/school/service/FeeService$1.class
 com/school/service/DiscountService.class
 com/school/controller/FeeController.class
 com/school/model/FeeStructure.class
@@ -12,7 +11,6 @@ com/school/model/FeeCalculationResult.class
 com/school/model/Program.class
 com/school/service/ProgramService.class
 com/school/model/Discount.class
-com/school/service/DiscountService$1.class
 com/school/controller/CalculatorController.class
 com/school/service/FeeService.class
 com/school/storage/JsonStorageService.class
