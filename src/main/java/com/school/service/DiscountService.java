@@ -16,6 +16,38 @@ public class DiscountService {
 
     public DiscountService(JsonStorageService storage) {
         this.storage = storage;
+        initializeDefaultDiscounts();
+    }
+
+    /** Seed default discounts if none exist. */
+    private void initializeDefaultDiscounts() {
+        List<Discount> existing = getAll();
+        if (!existing.isEmpty()) return;
+
+        long now = System.currentTimeMillis();
+        List<Discount> defaults = Arrays.asList(
+            makeDiscount("Loyalty Discount",    "LOYALTY",     "FIXED", 6000, "ALL",
+                         "Returning student loyalty discount", now),
+            makeDiscount("Early Bird Discount", "EARLY_BIRD",  "FIXED", 3000, "ALL",
+                         "Early admission discount offer",     now)
+        );
+        storage.writeAll(FILE, defaults);
+        System.out.println("[DiscountService] Default discounts initialized.");
+    }
+
+    private Discount makeDiscount(String name, String category, String type,
+                                   double value, String year, String desc, long ts) {
+        Discount d = new Discount();
+        d.setId(UUID.randomUUID().toString());
+        d.setName(name);
+        d.setCategory(category);
+        d.setDiscountType(type);
+        d.setValue(value);
+        d.setAcademicYear(year);
+        d.setDescription(desc);
+        d.setActive(true);
+        d.setCreatedAt(ts);
+        return d;
     }
 
     /** Get all discounts. */
@@ -66,10 +98,7 @@ public class DiscountService {
         return found;
     }
 
-    /**
-     * Calculate the discount amount for a given list of discount IDs
-     * against a total base fee.
-     */
+    /** Calculate total discount amount for given IDs against a base fee. */
     public double calculateTotal(List<String> ids, double totalBaseFees) {
         if (ids == null || ids.isEmpty()) return 0.0;
         double total = 0.0;
