@@ -2,7 +2,6 @@ com/school/service/DiscountService.class
 com/school/controller/FeeController.class
 com/school/model/FeeStructure.class
 com/school/controller/ProgramController.class
-com/school/service/ProgramService$1.class
 com/school/SchoolManagementApplication.class
 com/school/config/CorsConfig.class
 com/school/model/FeeCalculationRequest.class

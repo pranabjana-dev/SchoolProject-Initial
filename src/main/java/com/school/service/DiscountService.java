@@ -1,37 +1,32 @@
 package com.school.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.school.model.Discount;
-import com.school.storage.JsonStorageService;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * DiscountService — in-memory storage (no file system).
+ * Data is seeded from hardcoded defaults on startup.
+ * Changes persist for the lifetime of the process only.
+ */
 @Service
 public class DiscountService {
 
-    private static final String FILE = "discounts.json";
-    private final JsonStorageService storage;
-    public DiscountService(JsonStorageService storage) {
-        this.storage = storage;
+    private final List<Discount> store = new ArrayList<>();
+
+    public DiscountService() {
         initializeDefaultDiscounts();
     }
 
-    /** Seed default discounts if none exist. */
     private void initializeDefaultDiscounts() {
-        List<Discount> existing = getAll();
-        if (!existing.isEmpty()) return;
-
         long now = System.currentTimeMillis();
-        List<Discount> defaults = Arrays.asList(
-            makeDiscount("Loyalty Discount",    "LOYALTY",     "FIXED", 6000, "ALL",
-                         "Returning student loyalty discount", now),
-            makeDiscount("Early Bird Discount", "EARLY_BIRD",  "FIXED", 3000, "ALL",
-                         "Early admission discount offer",     now)
-        );
-        storage.writeAll(FILE, defaults);
-        System.out.println("[DiscountService] Default discounts initialized.");
+        store.add(makeDiscount("Loyalty Discount",    "LOYALTY",    "FIXED", 6000,
+                               "ALL", "Returning student loyalty discount", now));
+        store.add(makeDiscount("Early Bird Discount", "EARLY_BIRD", "FIXED", 3000,
+                               "ALL", "Early admission discount offer",     now));
+        System.out.println("[DiscountService] Default discounts loaded into memory.");
     }
 
     private Discount makeDiscount(String name, String category, String type,
@@ -49,62 +44,50 @@ public class DiscountService {
         return d;
     }
 
-    /** Get all discounts. */
     public List<Discount> getAll() {
-        long now = System.currentTimeMillis();
-	List<Discount> defaults = Arrays.asList(
-            makeDiscount("Loyalty Discount",    "LOYALTY",     "FIXED", 6000, "ALL",
-                         "Returning student loyalty discount", now),
-            makeDiscount("Early Bird Discount", "EARLY_BIRD",  "FIXED", 3000, "ALL",
-                         "Early admission discount offer",     now)
-        );
-	return defaults;
+        return Collections.unmodifiableList(store);
     }
 
-    /** Get only active discounts. */
     public List<Discount> getActive() {
-        return getAll().stream().filter(Discount::isActive).collect(Collectors.toList());
+        return store.stream().filter(Discount::isActive).collect(Collectors.toList());
     }
 
-    /** Find discount by ID. */
     public Optional<Discount> findById(String id) {
-        return getAll().stream().filter(d -> id.equals(d.getId())).findFirst();
+        return store.stream().filter(d -> id.equals(d.getId())).findFirst();
     }
 
-    /** Create or update a discount. */
     public Discount save(Discount discount) {
-        List<Discount> all = new ArrayList<>(getAll());
-
         if (discount.getId() == null || discount.getId().isBlank()) {
             discount.setId(UUID.randomUUID().toString());
             discount.setCreatedAt(System.currentTimeMillis());
-            all.add(discount);
+            store.add(discount);
         } else {
-            all.replaceAll(d -> d.getId().equals(discount.getId()) ? discount : d);
+            for (int i = 0; i < store.size(); i++) {
+                if (store.get(i).getId().equals(discount.getId())) {
+                    store.set(i, discount);
+                    return discount;
+                }
+            }
+            store.add(discount);
         }
-        storage.writeAll(FILE, all);
         return discount;
     }
 
-    /** Delete a discount by ID. */
     public boolean delete(String id) {
-        List<Discount> all = new ArrayList<>(getAll());
-        boolean removed = all.removeIf(d -> id.equals(d.getId()));
-        if (removed) storage.writeAll(FILE, all);
-        return removed;
+        return store.removeIf(d -> id.equals(d.getId()));
     }
 
-    /** Toggle active status. */
     public Optional<Discount> toggleActive(String id) {
-        Optional<Discount> found = findById(id);
-        found.ifPresent(d -> {
-            d.setActive(!d.isActive());
-            save(d);
-        });
-        return found;
+        for (int i = 0; i < store.size(); i++) {
+            if (store.get(i).getId().equals(id)) {
+                Discount d = store.get(i);
+                d.setActive(!d.isActive());
+                return Optional.of(d);
+            }
+        }
+        return Optional.empty();
     }
 
-    /** Calculate total discount amount for given IDs against a base fee. */
     public double calculateTotal(List<String> ids, double totalBaseFees) {
         if (ids == null || ids.isEmpty()) return 0.0;
         double total = 0.0;
