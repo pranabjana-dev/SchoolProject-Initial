@@ -7,12 +7,15 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * DiscountService — in-memory storage (no file system).
- * Data is seeded from hardcoded defaults on startup.
- * Changes persist for the lifetime of the process only.
+ * DiscountService — in-memory storage with FIXED stable IDs for defaults.
+ * Fixed IDs ensure discount lookups survive Render free-tier cold restarts.
  */
 @Service
 public class DiscountService {
+
+    // Stable IDs — never change these; browser chips depend on them surviving restarts
+    public static final String ID_LOYALTY    = "disc-default-loyalty-001";
+    public static final String ID_EARLY_BIRD = "disc-default-earlybird-001";
 
     private final List<Discount> store = new ArrayList<>();
 
@@ -21,18 +24,19 @@ public class DiscountService {
     }
 
     private void initializeDefaultDiscounts() {
-        long now = System.currentTimeMillis();
-        store.add(makeDiscount("Loyalty Discount",    "LOYALTY",    "FIXED", 6000,
-                               "ALL", "Returning student loyalty discount", now));
-        store.add(makeDiscount("Early Bird Discount", "EARLY_BIRD", "FIXED", 3000,
-                               "ALL", "Early admission discount offer",     now));
-        System.out.println("[DiscountService] Default discounts loaded into memory.");
+        store.add(makeDiscount(ID_LOYALTY,
+                "Loyalty Discount",    "LOYALTY",    "FIXED", 6000,
+                "ALL", "Returning student loyalty discount"));
+        store.add(makeDiscount(ID_EARLY_BIRD,
+                "Early Bird Discount", "EARLY_BIRD", "FIXED", 3000,
+                "ALL", "Early admission discount offer"));
+        System.out.println("[DiscountService] Default discounts loaded (stable IDs).");
     }
 
-    private Discount makeDiscount(String name, String category, String type,
-                                   double value, String year, String desc, long ts) {
+    private Discount makeDiscount(String id, String name, String category, String type,
+                                   double value, String year, String desc) {
         Discount d = new Discount();
-        d.setId(UUID.randomUUID().toString());
+        d.setId(id);
         d.setName(name);
         d.setCategory(category);
         d.setDiscountType(type);
@@ -40,7 +44,7 @@ public class DiscountService {
         d.setAcademicYear(year);
         d.setDescription(desc);
         d.setActive(true);
-        d.setCreatedAt(ts);
+        d.setCreatedAt(System.currentTimeMillis());
         return d;
     }
 
@@ -53,7 +57,10 @@ public class DiscountService {
     }
 
     public Optional<Discount> findById(String id) {
-        return store.stream().filter(d -> id.equals(d.getId())).findFirst();
+        if (id == null || id.isBlank()) return Optional.empty();
+        return store.stream()
+                .filter(d -> id.equals(d.getId()))
+                .findFirst();
     }
 
     public Discount save(Discount discount) {
