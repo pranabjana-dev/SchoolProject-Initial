@@ -23,6 +23,7 @@ public class FeeCalculationResult {
     private String actualAgeProgram;
     private int actualAgeMonths;         // Age used for actual calculation
     private String selectedProgram;      // Which program fee is calculated for
+    private String programMethod;        // "govt" | "actual" | "parent"
 
     // Academic year
     private String academicYear;         // e.g., "2024-25"
@@ -97,6 +98,9 @@ public class FeeCalculationResult {
 
     public String getSelectedProgram() { return selectedProgram; }
     public void setSelectedProgram(String selectedProgram) { this.selectedProgram = selectedProgram; }
+
+    public String getProgramMethod() { return programMethod; }
+    public void setProgramMethod(String programMethod) { this.programMethod = programMethod; }
 
     public String getAcademicYear() { return academicYear; }
     public void setAcademicYear(String academicYear) { this.academicYear = academicYear; }

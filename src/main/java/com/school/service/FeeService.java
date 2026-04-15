@@ -1,33 +1,50 @@
 package com.school.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.school.model.FeeStructure;
+import com.school.storage.JsonStorageService;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * FeeService — in-memory storage (no file system).
- * Data is seeded from hardcoded defaults on startup.
- * Changes persist for the lifetime of the process only.
+ * FeeService — hybrid storage.
+ * On startup: loads from JSON file if data exists, otherwise seeds hardcoded defaults.
+ * All writes go to JSON file (best-effort; non-fatal if storage unavailable).
+ * In-memory list is always the source of truth at runtime.
  */
 @Service
 public class FeeService {
 
+    private static final String FILE = "fees.json";
+
+    private final JsonStorageService storage;
     private final List<FeeStructure> store = new ArrayList<>();
 
-    public FeeService() {
-        initializeDefaultFees();
+    public FeeService(JsonStorageService storage) {
+        this.storage = storage;
+        loadOrSeedDefaults();
     }
 
-    private void initializeDefaultFees() {
+    private void loadOrSeedDefaults() {
+        List<FeeStructure> fromFile = storage.readAll(FILE, new TypeReference<List<FeeStructure>>() {});
+        if (fromFile != null && !fromFile.isEmpty()) {
+            store.addAll(fromFile);
+            System.out.println("[FeeService] Loaded " + store.size() + " fee structures from file.");
+        } else {
+            seedDefaults();
+            System.out.println("[FeeService] No file data — using hardcoded defaults.");
+        }
+    }
+
+    private void seedDefaults() {
         long now = System.currentTimeMillis();
         store.add(makeFee("Toddler",    "2026-27", 10000, 4000, 600, 2400, now));
         store.add(makeFee("Play Group", "2026-27", 10000, 4200, 600, 2400, now));
         store.add(makeFee("Nursery",    "2026-27", 10000, 4500, 600, 2400, now));
         store.add(makeFee("LKG",        "2026-27", 10000, 5100, 600, 2400, now));
         store.add(makeFee("UKG",        "2026-27", 10000, 5600, 600, 2400, now));
-        System.out.println("[FeeService] Default fee structures loaded into memory.");
     }
 
     private FeeStructure makeFee(String programName, String academicYear,
@@ -57,14 +74,12 @@ public class FeeService {
     }
 
     public Optional<FeeStructure> getForProgram(String programName, String academicYear) {
-        // Exact match first
         Optional<FeeStructure> exact = store.stream()
                 .filter(f -> programName.equalsIgnoreCase(f.getProgramName())
                           && academicYear.equals(f.getAcademicYear()))
                 .findFirst();
         if (exact.isPresent()) return exact;
 
-        // Fallback: latest for this program regardless of year
         return store.stream()
                 .filter(f -> programName.equalsIgnoreCase(f.getProgramName()))
                 .max(Comparator.comparingLong(FeeStructure::getUpdatedAt));
@@ -79,17 +94,20 @@ public class FeeService {
             for (int i = 0; i < store.size(); i++) {
                 if (store.get(i).getId().equals(fee.getId())) {
                     store.set(i, fee);
+                    persist();
                     return fee;
                 }
             }
-            // Not found — add as new
             store.add(fee);
         }
+        persist();
         return fee;
     }
 
     public boolean delete(String id) {
-        return store.removeIf(f -> f.getId().equals(id));
+        boolean removed = store.removeIf(f -> f.getId().equals(id));
+        if (removed) persist();
+        return removed;
     }
 
     public List<String> getAcademicYears() {
@@ -98,5 +116,9 @@ public class FeeService {
                 .distinct()
                 .sorted()
                 .collect(Collectors.toList());
+    }
+
+    private void persist() {
+        storage.writeAll(FILE, new ArrayList<>(store));
     }
 }

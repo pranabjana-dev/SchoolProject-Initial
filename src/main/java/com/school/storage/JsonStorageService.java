@@ -11,11 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Simple JSON file storage.
- * Data is stored in ${user.home}/school-data/ directory.
- *
- * On Render free tier, the filesystem resets on redeploy.
- * For persistence across deploys, see README for upgrade options.
+ * JsonStorageService — reads/writes JSON files to DATA_DIR.
+ * Used by FeeService and DiscountService for hybrid storage:
+ *   - If file exists and has data → use it
+ *   - If file missing or empty   → caller falls back to hardcoded defaults
  */
 @Service
 public class JsonStorageService {
@@ -27,30 +26,27 @@ public class JsonStorageService {
         this.objectMapper = new ObjectMapper();
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 
-        // Use DATA_DIR env var if set (for Docker/cloud), else use home dir
         String envDir = System.getenv("DATA_DIR");
         this.dataDir = (envDir != null && !envDir.isBlank())
                 ? envDir
                 : System.getProperty("user.home") + "/school-data/";
 
         File dir = new File(this.dataDir);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+        if (!dir.exists()) dir.mkdirs();
 
         System.out.println("[Storage] Data directory: " + this.dataDir);
     }
 
     /**
      * Read all records from a JSON file.
+     * Returns empty list if file doesn't exist or is unreadable.
      */
     public <T> List<T> readAll(String fileName, TypeReference<List<T>> type) {
         File file = new File(dataDir + fileName);
-        if (!file.exists()) {
-            return new ArrayList<>();
-        }
+        if (!file.exists()) return new ArrayList<>();
         try {
-            return objectMapper.readValue(file, type);
+            List<T> data = objectMapper.readValue(file, type);
+            return data != null ? data : new ArrayList<>();
         } catch (IOException e) {
             System.err.println("[Storage] Error reading " + fileName + ": " + e.getMessage());
             return new ArrayList<>();
@@ -59,13 +55,18 @@ public class JsonStorageService {
 
     /**
      * Write all records to a JSON file (overwrites existing).
+     * Silently skips if storage is unavailable (e.g. Render free tier).
      */
     public <T> void writeAll(String fileName, List<T> data) {
         File file = new File(dataDir + fileName);
         try {
             objectMapper.writeValue(file, data);
         } catch (IOException e) {
-            throw new RuntimeException("[Storage] Failed to write " + fileName, e);
+            System.err.println("[Storage] Could not write " + fileName + " (non-fatal): " + e.getMessage());
         }
+    }
+
+    public boolean isAvailable() {
+        return new File(dataDir).canWrite();
     }
 }

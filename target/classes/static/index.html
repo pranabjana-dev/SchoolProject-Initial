@@ -468,7 +468,7 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
 <header class="header">
   <div class="header-brand">
     <img src="/logo.jpg" alt="School Logo"
-       style="width:192px;height:70px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.25);"
+       style="width:48px;height:48px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.25);"
        >
     <div>
       <div class="header-title">School Management System</div>
@@ -711,22 +711,45 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
 
     <div class="form-group" style="margin-bottom:16px;">
       <label>Programme Selection Method</label>
-      <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">
+      <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;align-items:center;">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;font-weight:500;text-transform:none;letter-spacing:0;">
-          <input type="radio" name="prog-method" value="govt" checked style="width:auto;accent-color:var(--navy);">
+          <input type="radio" name="prog-method" value="govt" checked style="width:auto;accent-color:var(--navy);" onchange="onProgMethodChange()">
           Govt Recommended (age as of June 1)
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;font-weight:500;text-transform:none;letter-spacing:0;">
-          <input type="radio" name="prog-method" value="actual" style="width:auto;accent-color:var(--navy);">
-          Actual Age (age as of today)
+          <input type="radio" name="prog-method" value="actual" style="width:auto;accent-color:var(--navy);" onchange="onProgMethodChange()">
+          Actual Age (age as of joining date)
         </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;font-weight:500;text-transform:none;letter-spacing:0;">
+          <input type="radio" name="prog-method" value="parent" style="width:auto;accent-color:var(--navy);" onchange="onProgMethodChange()">
+          Parent's Choice
+        </label>
+      </div>
+      <div id="parent-choice-row" style="display:none;margin-top:12px;">
+        <div class="form-group">
+          <label>Select Programme</label>
+          <select id="parent-choice-select" style="max-width:300px;">
+            <option value="">Loading programmes...</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <div class="form-group" style="margin-bottom:20px;">
-      <label>Apply Discounts <span style="color:var(--text-muted);font-weight:400;">(select all applicable)</span></label>
-      <div class="discount-chips" id="discount-chips" style="margin-top:8px;">
-        <span style="font-size:0.8rem;color:var(--text-muted);">Loading discounts...</span>
+    <div style="margin-bottom:20px;position:relative;display:inline-block;">
+      <button type="button" onclick="toggleDiscountPopover()" id="discount-icon-btn"
+        title="Configure discounts"
+        style="background:transparent;border:none;cursor:pointer;padding:4px;opacity:0.35;transition:opacity 0.2s;"
+        onmouseenter="this.style.opacity='0.8'" onmouseleave="this.style.opacity='0.35'">
+        ⚙️
+      </button>
+      <span id="discount-selected-summary" style="display:none;"></span>
+      <!-- Discount popover -->
+      <div id="discount-popover" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:14px;min-width:300px;margin-top:4px;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;">Available Discounts</div>
+        <div id="discount-popover-list">Loading...</div>
+        <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="applyDiscountSelection()">Apply</button>
+        </div>
       </div>
     </div>
 
@@ -963,7 +986,7 @@ function showTab(name) {
   if (name === 'programs')  loadPrograms();
   if (name === 'fees')      { loadFees(); loadProgramsIntoSelects(); }
   if (name === 'discounts') loadDiscounts();
-  if (name === 'calculator'){ loadDiscountChips(); }
+  if (name === 'calculator'){ loadDiscountPopover(); }
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -1268,32 +1291,100 @@ async function deleteDiscount(id, name) {
 }
 
 // ── Calculator ────────────────────────────────────────────────────────────────
-async function loadDiscountChips() {
-  const container = document.getElementById('discount-chips');
-  const data = await apiFetch('GET', '/api/discounts/active').catch(() => []);
-  state.discounts = data;
-  if (!data.length) {
-    container.innerHTML = '<span style="font-size:0.82rem;color:var(--text-muted);">No active discounts configured. Go to Discounts tab to create some.</span>';
-    return;
-  }
-  container.innerHTML = data.map(d => {
-    const cls = d.category === 'EARLY_BIRD' ? 'early-bird' : 'loyalty';
-    const label = d.category === 'EARLY_BIRD' ? '🌅' : '🤝';
-    const val = d.discountType === 'FIXED' ? fmt(d.value) : d.value + '%';
-    return `<div class="chip ${cls}" data-id="${d.id}" onclick="toggleChip(this)" title="${d.description || ''}">
-      ${label} ${d.name} <span style="opacity:0.7;font-size:0.75rem;">(${val})</span>
-    </div>`;
-  }).join('');
-  state.selectedDiscountIds = [];
+// ── Discount Popover ──────────────────────────────────────────────────────────
+// Stores {id, name, category, discountType, value} for all active discounts
+let allDiscounts = [];
+
+async function loadDiscountPopover() {
+  allDiscounts = await apiFetch('GET', '/api/discounts/active').catch(() => []);
+  state.discounts = allDiscounts;
+  renderDiscountPopoverList();
+  updateDiscountSummary();
 }
 
-function toggleChip(el) {
+function renderDiscountPopoverList() {
+  const list = document.getElementById('discount-popover-list');
+  if (!list) return;
+  if (!allDiscounts.length) {
+    list.innerHTML = '<span style="font-size:0.82rem;color:var(--text-muted);">No active discounts configured.</span>';
+    return;
+  }
+  list.innerHTML = allDiscounts.map(d => {
+    const cat   = d.category === 'EARLY_BIRD' ? '🌅 Early Bird' : '🤝 Loyalty';
+    const val   = d.discountType === 'FIXED' ? fmt(d.value) : d.value + '%';
+    const sel   = state.selectedDiscountIds.includes(d.id);
+    return `<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+      <input type="checkbox" data-id="${d.id}" ${sel ? 'checked' : ''}
+        style="margin-top:2px;width:auto;accent-color:var(--navy);"
+        onchange="onDiscountCheck(this)">
+      <span>
+        <span style="font-weight:600;font-size:0.85rem;">${d.name}</span>
+        <span style="font-size:0.75rem;color:var(--text-muted);margin-left:6px;">${cat}</span><br>
+        <span style="font-size:0.8rem;color:var(--green);font-weight:600;">${d.discountType === 'FIXED' ? '− ' + val : '− ' + val + ' off'}</span>
+        ${d.description ? `<span style="font-size:0.72rem;color:var(--text-muted);"> · ${d.description}</span>` : ''}
+      </span>
+    </label>`;
+  }).join('');
+}
+
+function onDiscountCheck(el) {
   const id = el.dataset.id;
-  el.classList.toggle('selected');
-  if (el.classList.contains('selected')) {
-    state.selectedDiscountIds.push(id);
+  if (el.checked) {
+    if (!state.selectedDiscountIds.includes(id)) state.selectedDiscountIds.push(id);
   } else {
     state.selectedDiscountIds = state.selectedDiscountIds.filter(x => x !== id);
+  }
+  updateDiscountSummary();
+}
+
+function toggleDiscountPopover() {
+  const pop = document.getElementById('discount-popover');
+  if (!pop) return;
+  const isOpen = pop.style.display !== 'none';
+  pop.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderDiscountPopoverList();
+}
+
+function applyDiscountSelection() {
+  document.getElementById('discount-popover').style.display = 'none';
+  updateDiscountSummary();
+}
+
+function updateDiscountSummary() {
+  const summary = document.getElementById('discount-selected-summary');
+  const badge   = document.getElementById('discount-badge');
+  if (!summary) return;
+  const count = state.selectedDiscountIds.length;
+  // Summary is always hidden — gear icon only, no text shown to user
+  summary.style.display = 'none';
+  if (badge) badge.style.display = 'none';
+}
+
+// Close popover when clicking outside
+document.addEventListener('click', function(e) {
+  const pop = document.getElementById('discount-popover');
+  const btn = document.getElementById('discount-icon-btn');
+  if (pop && btn && !pop.contains(e.target) && !btn.contains(e.target)) {
+    pop.style.display = 'none';
+  }
+});
+
+// ── Programme method toggle ────────────────────────────────────────────────────
+async function onProgMethodChange() {
+  const method = document.querySelector('input[name="prog-method"]:checked')?.value;
+  const row    = document.getElementById('parent-choice-row');
+  if (!row) return;
+  if (method === 'parent') {
+    row.style.display = 'block';
+    // Load programmes into the select if not already loaded
+    const sel = document.getElementById('parent-choice-select');
+    if (sel && (sel.options.length <= 1 || sel.options[0].value === '')) {
+      const programs = await apiFetch('GET', '/api/programs/active').catch(() => []);
+      sel.innerHTML = '<option value="">Select programme...</option>' +
+        programs.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+    }
+  } else {
+    row.style.display = 'none';
   }
 }
 
@@ -1303,23 +1394,49 @@ function setDefaultJoiningDate() {
 }
 
 async function runCalculation() {
-  const dob = document.getElementById('calc-dob').value;
+  const dob    = document.getElementById('calc-dob').value;
   const joining = document.getElementById('calc-joining').value;
-  if (!dob) { toast('Date of birth is required', 'error'); return; }
-  if (!joining) { toast('Joining date is required', 'error'); return; }
+  if (!dob)    { toast('Date of birth is required', 'error'); return; }
+  if (!joining){ toast('Joining date is required', 'error'); return; }
+
+  const method = document.querySelector('input[name="prog-method"]:checked')?.value || 'govt';
+  if (method === 'parent') {
+    const pc = document.getElementById('parent-choice-select')?.value;
+    if (!pc) { toast("Please select a programme for Parent's Choice", 'error'); return; }
+  }
 
   const btn = document.getElementById('calc-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Calculating...';
 
-  const useGovt = document.querySelector('input[name="prog-method"]:checked').value === 'govt';
+  // Re-sync discount IDs against fresh server data (handles cold restarts)
+  const freshDiscounts = await apiFetch('GET', '/api/discounts/active').catch(() => []);
+  const freshIdSet = new Set(freshDiscounts.map(d => d.id));
+  const syncedIds = state.selectedDiscountIds.filter(id => freshIdSet.has(id));
+  // Fallback: re-match by name if IDs rotated on restart
+  if (syncedIds.length < state.selectedDiscountIds.length && allDiscounts.length) {
+    const selectedNames = allDiscounts
+      .filter(d => state.selectedDiscountIds.includes(d.id))
+      .map(d => d.name.toLowerCase());
+    const remapped = freshDiscounts
+      .filter(d => selectedNames.includes(d.name.toLowerCase()))
+      .map(d => d.id);
+    state.selectedDiscountIds = remapped;
+  } else {
+    state.selectedDiscountIds = syncedIds;
+  }
+
+  const parentChoiceProgram = method === 'parent'
+    ? document.getElementById('parent-choice-select')?.value || ''
+    : '';
 
   const payload = {
-    studentName: document.getElementById('calc-name').value.trim() || null,
-    dateOfBirth: dob,
-    joiningDate: joining,
-    discountIds: [...state.selectedDiscountIds],
-    useGovtRecommended: useGovt,
+    studentName:          document.getElementById('calc-name').value.trim() || null,
+    dateOfBirth:          dob,
+    joiningDate:          joining,
+    discountIds:          [...state.selectedDiscountIds],
+    programMethod:        method,
+    parentChoiceProgram:  parentChoiceProgram,
   };
 
   try {
@@ -1335,8 +1452,11 @@ function clearCalculator() {
   document.getElementById('calc-name').value = '';
   document.getElementById('calc-dob').value = '';
   setDefaultJoiningDate();
-  document.querySelectorAll('.chip.selected').forEach(c => c.classList.remove('selected'));
   state.selectedDiscountIds = [];
+  updateDiscountSummary();
+  const row = document.getElementById('parent-choice-row');
+  if (row) row.style.display = 'none';
+  document.querySelectorAll('input[name="prog-method"]')[0].checked = true;
   document.getElementById('calc-result').style.display = 'none';
   document.getElementById('calc-result').innerHTML = '';
 }
@@ -1359,7 +1479,8 @@ function renderCalcResult(r) {
     ? `<div class="alert alert-warning">⚠️ No fee structure configured for <strong>${r.selectedProgram}</strong> (${r.academicYear}). Please set up fee structure first.</div>`
     : '';
 
-  const discountRows = r.appliedDiscounts && r.appliedDiscounts.length > 0
+  const hasDiscounts = r.appliedDiscounts && r.appliedDiscounts.length > 0;
+  const discountRows = hasDiscounts
     ? r.appliedDiscounts.map(d => {
         const val = d.discountType === 'FIXED'
           ? `− ${fmt(d.value)}`
@@ -1367,11 +1488,42 @@ function renderCalcResult(r) {
         const cat = d.category === 'EARLY_BIRD' ? '🌅' : '🤝';
         return `<tr><td class="label" style="padding-left:32px;">${cat} ${d.name}</td><td class="value discount">${val}</td></tr>`;
       }).join('')
-    : `<tr><td class="label" style="padding-left:32px;">No discounts applied</td><td class="value" style="color:var(--text-muted);">—</td></tr>`;
+    : '';
 
-  // Programme comparison — show only selected programme fee details prominently
-  const govtSelected  = r.selectedProgram === r.govtRecommendedProgram;
-  const useGovt = document.querySelector('input[name="prog-method"]:checked').value === 'govt';
+  // Full discount block (separator + rows + total) — hidden when no discounts
+  const discountBlock = hasDiscounts ? `
+    <tr class="separator"><td colspan="2">Discounts Applied</td></tr>
+    ${discountRows}
+    <tr><td class="label"><strong>Total Discount</strong></td>
+        <td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>` : '';
+
+  const method = r.programMethod || 'govt';
+
+  // Build programme comparison boxes
+  const progBoxes = (() => {
+    const govtBox = `
+      <div class="prog-box ${method === 'govt' ? 'selected' : ''}">
+        <div class="prog-box-label">🏛️ Govt Recommended</div>
+        <div class="prog-box-value">${r.govtRecommendedProgram}</div>
+        <div class="prog-box-sub">Age as of ${r.govtJune1Date}: <strong>${r.govtAgeMonths} months</strong></div>
+        ${method === 'govt' ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED</div>' : ''}
+      </div>`;
+    const actualBox = `
+      <div class="prog-box ${method === 'actual' ? 'selected' : ''}">
+        <div class="prog-box-label">📅 Actual Age</div>
+        <div class="prog-box-value">${r.actualAgeProgram}</div>
+        <div class="prog-box-sub">Age as of joining date: <strong>${r.actualAgeMonths} months</strong></div>
+        ${method === 'actual' ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED</div>' : ''}
+      </div>`;
+    const parentBox = method === 'parent' ? `
+      <div class="prog-box selected">
+        <div class="prog-box-label">👨‍👩‍👧 Parent's Choice</div>
+        <div class="prog-box-value">${r.selectedProgram}</div>
+        <div class="prog-box-sub">Manually selected by parent</div>
+        <div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED</div>
+      </div>` : '';
+    return govtBox + actualBox + parentBox;
+  })();
 
   container.innerHTML = `
     ${feeWarning}
@@ -1387,19 +1539,8 @@ function renderCalcResult(r) {
         <tr class="separator"><td colspan="2">Programme Recommendation</td></tr>
       </table>
 
-      <div class="program-comparison">
-        <div class="prog-box ${useGovt ? 'selected' : ''}">
-          <div class="prog-box-label">🏛️ Govt Recommended</div>
-          <div class="prog-box-value">${r.govtRecommendedProgram}</div>
-          <div class="prog-box-sub">Age as of ${r.govtJune1Date}: <strong>${r.govtAgeMonths} months</strong></div>
-          ${useGovt ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED — fees shown below</div>' : ''}
-        </div>
-        <div class="prog-box ${!useGovt ? 'selected' : ''}">
-          <div class="prog-box-label">📅 Based on Actual Age</div>
-          <div class="prog-box-value">${r.actualAgeProgram}</div>
-          <div class="prog-box-sub">Age as of joining date: <strong>${r.actualAgeMonths} months</strong></div>
-          ${!useGovt ? '<div style="margin-top:6px;font-size:0.72rem;color:var(--gold);font-weight:700;">✓ SELECTED — fees shown below</div>' : ''}
-        </div>
+      <div class="program-comparison" style="grid-template-columns:${method === 'parent' ? 'repeat(3,1fr)' : '1fr 1fr'};">
+        ${progBoxes}
       </div>
 
       <table class="result-table">
@@ -1417,12 +1558,9 @@ function renderCalcResult(r) {
             <td class="value money">${fmt(r.sessionFees * r.durationMonths)}</td></tr>
         <tr><td class="label"><strong>Total Base Fees</strong> <span style="font-size:0.72rem;color:var(--text-muted);">(excl. Sports &amp; Celebration)</span></td>
             <td class="value total">${fmt(r.totalBaseFees)}</td></tr>
-        <tr class="separator"><td colspan="2">Discounts Applied</td></tr>
-        ${discountRows}
-        <tr><td class="label"><strong>Total Discount</strong></td>
-            <td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
+        ${discountBlock}
         <tr style="background:var(--surface2);">
-          <td class="label"><strong>Discounted Base Fees</strong></td>
+          <td class="label"><strong>${hasDiscounts ? 'Discounted Base Fees' : 'Total Base Fees'}</strong></td>
           <td class="value total">${fmt(r.discountedFees)}</td>
         </tr>
         <tr class="separator"><td colspan="2">Additional Annual Charges (not included in base fees)</td></tr>
@@ -1524,6 +1662,13 @@ function openQuotation() {
   const inst1Display = round2(r.installment1Variable + shortfall);
   const today = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' });
 
+  // Pre-compute conditional values to avoid nested template literals
+  const quotDiscountRow = (r.appliedDiscounts && r.appliedDiscounts.length > 0)
+    ? '<tr><td class="label">Total Discounts</td><td class="value discount">− ' + fmt(r.totalDiscountAmount) + '</td></tr>'
+    : '';
+  const quotFinalLabel = (r.appliedDiscounts && r.appliedDiscounts.length > 0)
+    ? 'Final Fees (after discount)' : 'Final Fees';
+
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -1612,8 +1757,8 @@ function openQuotation() {
     <table>
       <tr><th colspan="2">Fee Summary</th></tr>
       <tr><td class="label">Base Fees (Fixed + ${r.durationMonths} months session)</td><td class="value money">${fmt(r.totalBaseFees)}</td></tr>
-      <tr><td class="label">Total Discounts</td><td class="value discount">− ${fmt(r.totalDiscountAmount)}</td></tr>
-      <tr class="total-row"><td>Final Fees (after discount)</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.discountedFees)}</td></tr>
+      ${quotDiscountRow}
+      <tr class="total-row"><td>${quotFinalLabel}</td><td style="font-family:'Lora',serif;color:#1B2D6B;">${fmt(r.discountedFees)}</td></tr>
     </table>
     <div style="margin-top:6px;padding:7px 10px;background:#fff8e6;border-left:3px solid #D4921A;border-radius:0 5px 5px 0;font-size:0.72rem;color:#7a5000;line-height:1.6;">
       <strong style="display:block;margin-bottom:2px;">⚠ Additional Charges (included in installments)</strong>

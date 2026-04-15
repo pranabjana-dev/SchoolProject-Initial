@@ -9,15 +9,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * CalculatorService — all fee calculation business logic lives here.
- *
- * Key rules:
- * 1. Govt age    = DOB → June 1 of the academic year start
- * 2. Actual age  = DOB → Joining Date
- * 3. Proration   = joining month → March (full month, mid-month counts as full)
- * 4. Academic year = June–March (e.g., June 2026 – March 2027 = "2026-27")
- */
 @Service
 public class CalculatorService {
 
@@ -39,7 +30,6 @@ public class CalculatorService {
     public FeeCalculationResult calculate(FeeCalculationRequest request) {
         FeeCalculationResult result = new FeeCalculationResult();
 
-        // ── Parse input dates ──────────────────────────────────────────────
         LocalDate dob         = LocalDate.parse(request.getDateOfBirth());
         LocalDate joiningDate = LocalDate.parse(request.getJoiningDate());
 
@@ -60,12 +50,9 @@ public class CalculatorService {
         result.setEndDate(endDate.format(DISPLAY_FMT));
 
         // ── Age calculations ───────────────────────────────────────────────
-        // Govt age:   DOB → June 1 of the AY start
         int govtAgeMonths   = (int) Math.max(0, ChronoUnit.MONTHS.between(dob, june1));
-        // Actual age: DOB → Joining Date
         int actualAgeMonths = (int) Math.max(0, ChronoUnit.MONTHS.between(dob, joiningDate));
 
-        // Display age: DOB → Joining Date
         Period agePeriod = Period.between(dob, joiningDate);
         result.setAgeYears(agePeriod.getYears());
         result.setAgeMonths(agePeriod.getMonths());
@@ -88,10 +75,26 @@ public class CalculatorService {
         result.setGovtRecommendedProgram(govtProgram);
         result.setActualAgeProgram(actualProgram);
 
-        String selectedProgram = request.isUseGovtRecommended() ? govtProgram : actualProgram;
-        result.setSelectedProgram(selectedProgram);
+        String method = request.getProgramMethod() != null
+                ? request.getProgramMethod().toLowerCase()
+                : "govt";
 
-        // ── Duration calculation ───────────────────────────────────────────
+        String selectedProgram;
+        switch (method) {
+            case "actual":
+                selectedProgram = actualProgram;
+                break;
+            case "parent":
+                String chosen = request.getParentChoiceProgram();
+                selectedProgram = (chosen != null && !chosen.isBlank()) ? chosen : govtProgram;
+                break;
+            default: // "govt"
+                selectedProgram = govtProgram;
+        }
+        result.setSelectedProgram(selectedProgram);
+        result.setProgramMethod(method);
+
+        // ── Duration ───────────────────────────────────────────────────────
         LocalDate joiningMonthStart = joiningDate.withDayOfMonth(1);
         LocalDate endMonthStart     = endDate.withDayOfMonth(1);
         int durationMonths = (int) ChronoUnit.MONTHS.between(joiningMonthStart, endMonthStart) + 1;
@@ -104,7 +107,7 @@ public class CalculatorService {
                 + " (" + durationMonths + " months)"
         );
 
-        // ── Fee structure lookup ───────────────────────────────────────────
+        // ── Fee structure ──────────────────────────────────────────────────
         Optional<FeeStructure> feeOpt = feeService.getForProgram(selectedProgram, academicYear);
 
         double fixedComponent  = 0.0;
@@ -131,35 +134,27 @@ public class CalculatorService {
         result.setCelebrationFees(round2(celebrationFees));
         result.setTotalBaseFees(round2(totalBaseFees));
 
-        // ── Discount application ───────────────────────────────────────────
-        // Resolve requested discount IDs against ALL known discounts in memory.
-        // Using a Set for reliable O(1) membership check, avoiding any subtle
-        // string comparison issues in the one-by-one findById loop.
+        // ── Discounts ──────────────────────────────────────────────────────
         List<Discount> appliedDiscounts    = new ArrayList<>();
         double         totalDiscountAmount = 0.0;
 
         List<String> requestedIds = request.getDiscountIds();
         if (requestedIds != null && !requestedIds.isEmpty()) {
-
-            // Build a set of trimmed requested IDs to guard against whitespace
             Set<String> idSet = requestedIds.stream()
                     .filter(id -> id != null && !id.isBlank())
                     .map(String::trim)
                     .collect(Collectors.toSet());
 
-            // Match against every known discount (active or not — user explicitly chose them)
             for (Discount d : discountService.getAll()) {
                 if (d.getId() != null && idSet.contains(d.getId().trim())) {
                     appliedDiscounts.add(d);
                 }
             }
 
-            // Calculate total discount amount
             for (Discount d : appliedDiscounts) {
-                String type = d.getDiscountType();
-                if ("FIXED".equalsIgnoreCase(type)) {
+                if ("FIXED".equalsIgnoreCase(d.getDiscountType())) {
                     totalDiscountAmount += d.getValue();
-                } else if ("PERCENTAGE".equalsIgnoreCase(type)) {
+                } else if ("PERCENTAGE".equalsIgnoreCase(d.getDiscountType())) {
                     totalDiscountAmount += totalBaseFees * d.getValue() / 100.0;
                 }
             }
@@ -179,16 +174,12 @@ public class CalculatorService {
         double inst3Var = round2(variable * 0.30);
 
         result.setBookingAmount(round2(fixedComponent));
-
         result.setInstallment1Variable(inst1Var);
         result.setInstallment1(inst1Var);
-
         result.setInstallment2Variable(inst2Var);
         result.setInstallment2(round2(inst2Var + sportsFees));
-
         result.setInstallment3Variable(inst3Var);
         result.setInstallment3(round2(inst3Var + celebrationFees));
-
         result.setTotalPayable(round2(discountedFees + sportsFees + celebrationFees));
 
         return result;
