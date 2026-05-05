@@ -934,6 +934,48 @@ input[type="checkbox"] { width: auto; accent-color: var(--navy); width: 16px; he
 <!-- ══════════════════════════════════════════
      TOAST NOTIFICATIONS
 ══════════════════════════════════════════ -->
+
+<!-- ══════════════════════════════════════════
+     MODAL: GENERATE INVOICE
+══════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-invoice">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">🧾 Generate Invoice</div>
+      <button class="modal-close" onclick="closeModal('modal-invoice')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Parent / Guardian Name *</label>
+        <input type="text" id="inv-parent-name" placeholder="e.g. Mr. Rajesh Sharma">
+      </div>
+      <div class="form-group">
+        <label>Address *</label>
+        <textarea id="inv-address" rows="3" placeholder="Full address including city and PIN"
+          style="resize:vertical;"></textarea>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Invoice # *</label>
+          <input type="text" id="inv-number" placeholder="e.g. TT-2026-001">
+        </div>
+        <div class="form-group">
+          <label>Invoice Date *</label>
+          <input type="date" id="inv-date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Due Date *</label>
+        <input type="date" id="inv-due-date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-invoice')">Cancel</button>
+      <button class="btn btn-primary" onclick="generateInvoice()">🧾 Generate Invoice</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container" style="position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px;"></div>
 
 <!-- ══════════════════════════════════════════
@@ -1634,6 +1676,7 @@ function renderCalcResult(r) {
 
     <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;" class="no-print">
       <button class="btn btn-gold" onclick="openQuotation()">📄 Download Quotation</button>
+      <button class="btn btn-primary" onclick="openInvoiceModal()">🧾 Generate Invoice</button>
       <button class="btn btn-outline" onclick="window.print()">🖨️ Print</button>
       <button class="btn btn-outline" onclick="clearCalculator()">✕ Clear</button>
     </div>
@@ -1834,6 +1877,437 @@ function fmtDate(s) {
   setDefaultJoiningDate();
   await loadDashboard();
 })();
+
+// ── Invoice Generation ───────────────────────────────────────────────────────
+// Cache invoice form data per student (keyed by DOB+joiningDate)
+const invoiceCache = {};
+
+function invoiceCacheKey() {
+  return lastResult ? (lastResult.dateOfBirth + '_' + lastResult.joiningDate) : 'default';
+}
+
+function openInvoiceModal() {
+  if (!lastResult) { toast('Please calculate fees first', 'error'); return; }
+
+  // Set default invoice date to today
+  const todayStr = new Date().toISOString().split('T')[0];
+  document.getElementById('inv-date').value = todayStr;
+
+  // Restore cached data if same student
+  const key = invoiceCacheKey();
+  const cached = invoiceCache[key];
+  if (cached) {
+    document.getElementById('inv-parent-name').value = cached.parentName  || '';
+    document.getElementById('inv-address').value      = cached.address     || '';
+    document.getElementById('inv-number').value       = cached.invNumber   || '';
+    document.getElementById('inv-date').value         = cached.invDate     || todayStr;
+    document.getElementById('inv-due-date').value     = cached.dueDate     || '';
+  } else {
+    document.getElementById('inv-parent-name').value = '';
+    document.getElementById('inv-address').value      = '';
+    document.getElementById('inv-number').value       = '';
+    document.getElementById('inv-due-date').value     = '';
+  }
+
+  openModal('modal-invoice');
+}
+
+function fmtDateLong(str) {
+  if (!str) return '—';
+  const d = new Date(str + 'T00:00:00');
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function numberToWords(amount) {
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
+                 'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen',
+                 'Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+
+  function twoDigits(n) {
+    if (n < 20) return ones[n];
+    return tens[Math.floor(n/10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+  }
+  function threeDigits(n) {
+    if (n >= 100) return ones[Math.floor(n/100)] + ' Hundred' + (n%100 ? ' ' + twoDigits(n%100) : '');
+    return twoDigits(n);
+  }
+
+  const n = Math.round(amount);
+  if (n === 0) return 'Zero';
+  let result = '';
+  const crore = Math.floor(n / 10000000);
+  const lakh  = Math.floor((n % 10000000) / 100000);
+  const thous = Math.floor((n % 100000) / 1000);
+  const rest  = n % 1000;
+  if (crore) result += threeDigits(crore) + ' Crore ';
+  if (lakh)  result += threeDigits(lakh)  + ' Lakh ';
+  if (thous) result += threeDigits(thous) + ' Thousand ';
+  if (rest)  result += threeDigits(rest);
+  return result.trim();
+}
+
+// Random invoice reference numbers for the notes section
+function randomInvoiceRefs() {
+  const refs = [];
+  let base = Math.floor(Math.random() * 800) + 100;
+  for (let i = 0; i < 4; i++) { refs.push(base); base += Math.floor(Math.random() * 50) + 10; }
+  return refs.join(', ');
+}
+
+function generateInvoice() {
+  const r = lastResult;
+  if (!r) return;
+
+  const parentName = document.getElementById('inv-parent-name').value.trim();
+  const address    = document.getElementById('inv-address').value.trim();
+  const invNumber  = document.getElementById('inv-number').value.trim();
+  const invDate    = document.getElementById('inv-date').value;
+  const dueDate    = document.getElementById('inv-due-date').value;
+
+  if (!parentName || !address || !invNumber || !invDate || !dueDate) {
+    toast('Please fill in all invoice fields', 'error'); return;
+  }
+
+  // Cache the data
+  invoiceCache[invoiceCacheKey()] = { parentName, address, invNumber, invDate, dueDate };
+  closeModal('modal-invoice');
+
+  const studentName  = r.studentName || 'Student';
+  const totalPayable = r.totalPayable;
+  const amountWords  = numberToWords(Math.round(totalPayable));
+  const invoiceRefs  = randomInvoiceRefs();
+  const addressLines = address.split('\n').map(l => `<div>${l}</div>`).join('');
+
+  const invoiceHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Invoice ${invNumber}</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 14mm 16mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    color: #1a1f3a;
+    background: #fff;
+    padding: 28px 32px;
+    font-size: 12.5px;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* Watermark */
+  .watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-family: 'Lora', serif;
+    font-size: 72px;
+    font-weight: 700;
+    color: rgba(27,45,107,0.045);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 0;
+    user-select: none;
+    letter-spacing: 4px;
+  }
+  .content { position: relative; z-index: 1; }
+
+  /* Header */
+  .inv-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .inv-logo-block { display: flex; flex-direction: column; gap: 6px; }
+  .inv-logo-block img { width: 192px; height: 70px; object-fit: contain; }
+  .inv-label {
+    font-family: 'Lora', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #1B2D6B;
+    letter-spacing: 3px;
+    margin-top: 6px;
+  }
+
+  .inv-company { text-align: right; line-height: 1.6; }
+  .inv-company .co-name { font-family: 'Lora', serif; font-size: 15px; font-weight: 700; color: #1B2D6B; }
+  .inv-company .co-pan  { font-weight: 700; font-size: 11px; color: #1a1f3a; }
+  .inv-company .co-rest { font-size: 10.5px; color: #4a5070; }
+
+  hr.divider { border: none; border-top: 2px solid #1B2D6B; margin: 16px 0; }
+  hr.thin    { border: none; border-top: 1px solid #d0d5e8; margin: 14px 0; }
+
+  /* Bill To / Invoice details */
+  .inv-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+  .bill-to { flex: 1; }
+  .bill-to .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9aa3be;
+    margin-bottom: 5px;
+  }
+  .bill-to .student-name {
+    font-family: 'Lora', serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #1B2D6B;
+  }
+  .bill-to .parent-name { font-weight: 600; font-size: 12px; margin-top: 2px; }
+  .bill-to .address     { font-size: 11px; color: #4a5070; margin-top: 3px; line-height: 1.5; }
+
+  .inv-details { text-align: right; }
+  .inv-details table { margin-left: auto; border-collapse: collapse; }
+  .inv-details td { padding: 2px 0 2px 14px; font-size: 11.5px; }
+  .inv-details .meta-label { color: #9aa3be; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+  .inv-details .meta-value { font-weight: 600; color: #1a1f3a; }
+  .inv-details .inv-num-val { font-family: 'Lora', serif; font-size: 14px; font-weight: 700; color: #1B2D6B; }
+
+  /* Items Table */
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+  .items-table thead tr {
+    border-bottom: 2px solid #1B2D6B;
+    border-top: 2px solid #1B2D6B;
+  }
+  .items-table th {
+    padding: 9px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    color: #1B2D6B;
+    background: transparent;
+    text-align: left;
+  }
+  .items-table th:last-child,
+  .items-table td:last-child { text-align: right; }
+  .items-table th.center,
+  .items-table td.center { text-align: center; }
+  .items-table td {
+    padding: 12px 10px;
+    font-size: 12px;
+    color: #1a1f3a;
+    border: none;
+    vertical-align: top;
+  }
+  .item-primary { font-weight: 600; }
+  .item-sub     { font-size: 10.5px; color: #6b748e; margin-top: 3px; }
+  .amount-val   { font-family: 'Lora', serif; font-weight: 700; font-size: 13px; color: #1a1f3a; }
+
+  /* Totals */
+  .totals-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 10px 0;
+  }
+  .total-label { font-size: 10.5px; color: #6b748e; }
+  .total-value { font-family: 'Lora', serif; font-size: 15px; font-weight: 700; color: #1B2D6B; }
+
+  .words-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px 4px;
+    font-size: 11px;
+  }
+  .qty-label  { color: #6b748e; }
+  .words-text { color: #1a1f3a; font-weight: 500; font-style: italic; text-align: right; }
+
+  /* Paid stamp */
+  .paid-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 6px;
+    padding-right: 10px;
+  }
+  .paid-icon {
+    width: 26px; height: 26px;
+    background: #27ae60;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .paid-text { font-family: 'Lora', serif; font-size: 14px; font-weight: 700; color: #27ae60; }
+
+  /* Signature */
+  .sig-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-right: 10px;
+    margin-top: 20px;
+    margin-bottom: 10px;
+  }
+  .sig-for    { font-size: 11.5px; font-weight: 700; color: #1B2D6B; margin-bottom: 6px; }
+  .sig-img    { height: 50px; width: 140px; object-fit: contain; opacity: 0.85; }
+  .sig-spacer { height: 40px; width: 140px; border-bottom: 1px solid #d0d5e8; }
+  .sig-label  { font-size: 10px; color: #9aa3be; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* Notes */
+  .notes-block { margin-top: 16px; padding: 0 10px; }
+  .notes-label { font-weight: 700; font-size: 11px; color: #1a1f3a; margin-bottom: 4px; }
+  .notes-text  { font-size: 10.5px; color: #6b748e; line-height: 1.6; }
+
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="watermark">TinyTroves Preschool</div>
+<div class="content">
+
+<!-- HEADER -->
+<div class="inv-header">
+  <div class="inv-logo-block">
+    <img src="/logo.jpg" alt="TinyTroves Logo"
+         onerror="this.style.display='none'">
+    <div class="inv-label">INVOICE</div>
+  </div>
+  <div class="inv-company">
+    <div class="co-name">TinyTroves Preschool</div>
+    <div class="co-pan">PAN AAACTI2931G</div>
+    <div class="co-rest">A UNIT OF IKSHANA EDUCATIONAL TRUST</div>
+    <div class="co-rest">Sai Prakash Enclave, #298 Palm Groves</div>
+    <div class="co-rest">Apartment Main Road, Naganayakanahalli, Marasur Post, Anekal</div>
+    <div class="co-rest">Bangalore, KARNATAKA, 562106</div>
+    <div class="co-rest">Mobile: +91 8971498214, 9108876006</div>
+    <div class="co-rest">Email: tinytrovespreschool@gmail.com</div>
+    <div class="co-rest">Website: www.tinytrovespreschool.in</div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- BILL TO + INVOICE DETAILS -->
+<div class="inv-meta">
+  <div class="bill-to">
+    <div class="section-label">Bill To</div>
+    <div class="student-name">TinyTroves — ${studentName}</div>
+    <div class="parent-name">${parentName}</div>
+    <div class="address">${addressLines}</div>
+  </div>
+  <div class="inv-details">
+    <table>
+      <tr>
+        <td class="meta-label">Invoice #</td>
+        <td class="meta-value inv-num-val">${invNumber}</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Invoice Date</td>
+        <td class="meta-value">${fmtDateLong(invDate)}</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Due Date</td>
+        <td class="meta-value" style="color:#c0392b;">${fmtDateLong(dueDate)}</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Academic Year</td>
+        <td class="meta-value">${r.academicYear}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ITEMS TABLE -->
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width:5%;">#</th>
+      <th style="width:60%;">Item</th>
+      <th class="center" style="width:15%;">HSN / SAC</th>
+      <th style="width:20%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>
+        <div class="item-primary">Tuition Fees — ${r.selectedProgram} &nbsp;|&nbsp; AY ${r.academicYear}</div>
+        <div class="item-sub">Duration: ${r.durationDescription}</div>
+      </td>
+      <td class="center">—</td>
+      <td class="amount-val">₹${totalPayable.toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr class="thin">
+
+<!-- TOTALS -->
+<div class="totals-row">
+  <span></span>
+  <span class="total-value">₹${totalPayable.toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+</div>
+
+<hr class="thin">
+
+<!-- QTY + AMOUNT IN WORDS -->
+<div class="words-row">
+  <span class="qty-label">Total Items / Qty: &nbsp;<strong>1 / 1</strong></span>
+  <span class="words-text">Total Amount (in words): &nbsp;<strong>INR ${amountWords} Only</strong></span>
+</div>
+
+<hr class="thin">
+
+<!-- AMOUNT PAID -->
+<div class="paid-row">
+  <span class="paid-icon">✓</span>
+  <span class="paid-text">Amount Paid</span>
+</div>
+
+<!-- SIGNATURE BLOCK -->
+<div class="sig-block">
+  <div class="sig-for">For TinyTroves Preschool</div>
+  <img src="/signature.png" alt="Signature" class="sig-img"
+       onerror="this.outerHTML='<div class=\'sig-spacer\'></div>'">
+  <div class="sig-spacer" style="margin-top:30px;"></div>
+  <div class="sig-label">Authorised Signatory</div>
+</div>
+
+<!-- NOTES -->
+<div class="notes-block">
+  <div class="notes-label">Notes:</div>
+  <div class="notes-text">
+    This invoice is a digital reference to invoice no. ${invoiceRefs}.<br>
+    All fees once paid are non-refundable. For queries, contact TinyTroves office.
+  </div>
+</div>
+
+<div class="no-print" style="text-align:center;margin-top:24px;">
+  <button onclick="window.print()"
+    style="padding:9px 26px;background:#1B2D6B;color:#fff;border:none;border-radius:8px;font-size:0.85rem;cursor:pointer;font-family:sans-serif;">
+    🖨️ Print / Save as PDF
+  </button>
+</div>
+
+</div><!-- .content -->
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(invoiceHtml);
+  win.document.close();
+}
+
 </script>
 </body>
 </html>
